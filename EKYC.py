@@ -153,9 +153,7 @@ fig_src.update_traces(
     textposition="inside"
 )
 
-fig_src.for_each_xaxis(
-    lambda axis: axis.update(categoryorder="total descending")
-)
+fig_src.update_xaxes(categoryorder="total descending")
 
 # Tambah anotasi total request
 for i, row in src_request.iterrows():
@@ -454,6 +452,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
