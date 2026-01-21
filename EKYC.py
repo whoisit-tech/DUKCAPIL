@@ -63,17 +63,14 @@ df_f = df[
 ]
 
 # ======================
-# KPI SECTION
+# KPI PER NIK
 # ======================
 
-# Total request (jumlah row)
-total_request = len(df_f)
+# Hitung kemunculan per NIK
+nik_counts = df_f.groupby("Nik").size()
 
-# Hitung frekuensi NIK
-nik_counts = df_f["Nik"].value_counts()
-
-# Total NIK unik
-total_nik = nik_counts.count()
+# Total NIK (per orang)
+total_nik = nik_counts.shape[0]
 
 # NIK hit 1 kali
 nik_hit_1 = (nik_counts == 1).sum()
@@ -81,19 +78,21 @@ nik_hit_1 = (nik_counts == 1).sum()
 # NIK hit lebih dari 1 kali
 nik_hit_gt1 = (nik_counts > 1).sum()
 
-# Persentase
+# Persentase (basis per NIK)
 pct_hit_1 = nik_hit_1 / total_nik if total_nik else 0
 pct_hit_gt1 = nik_hit_gt1 / total_nik if total_nik else 0
+
 
 # ======================
 # DISPLAY KPI
 # ======================
 k1, k2, k3, k4 = st.columns(4)
 
-k1.metric("Total Request", f"{total_request:,}")
+k1.metric("Total NIK", f"{total_nik:,}")
 k2.metric("NIK Hit 1x", f"{nik_hit_1:,}", f"{pct_hit_1:.2%}")
 k3.metric("NIK Hit >1x", f"{nik_hit_gt1:,}", f"{pct_hit_gt1:.2%}")
-k4.metric("Total Unique NIK", f"{total_nik:,}")
+k4.metric("Total Request", f"{len(df_f):,}")
+
 
 # ======================
 # SOURCE RESULT CHART
@@ -343,5 +342,6 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
