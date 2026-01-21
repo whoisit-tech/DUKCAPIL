@@ -93,21 +93,44 @@ k2.metric("NIK Hit 1x", f"{nik_hit_1:,}", f"{pct_hit_1:.2%}")
 k3.metric("NIK Hit >1x", f"{nik_hit_gt1:,}", f"{pct_hit_gt1:.2%}")
 k4.metric("Total Request", f"{len(df_f):,}")
 
-
 # ======================
-# SOURCE RESULT CHART
+# SOURCE RESULT - STACKED BAR (NIK HIT)
 # ======================
-st.subheader("Source Result Distribution")
+st.subheader("Source Result Distribution (NIK Hit)")
 
-src_count = df_f["SourceResult"].value_counts().reset_index()
-src_count.columns = ["SourceResult", "Count"]
+# Hitung hit per NIK per SourceResult
+nik_source = (
+    df_f
+    .groupby(["SourceResult", "Nik"])
+    .size()
+    .reset_index(name="hit_count")
+)
 
+# Kategorisasi hit
+nik_source["hit_type"] = nik_source["hit_count"].apply(
+    lambda x: "Hit 1x" if x == 1 else "Hit >1x"
+)
+
+# Agregasi per SourceResult
+src_stack = (
+    nik_source
+    .groupby(["SourceResult", "hit_type"])
+    .size()
+    .reset_index(name="nik_count")
+)
+
+# Plot stacked bar
 fig_src = px.bar(
-    src_count,
+    src_stack,
     x="SourceResult",
-    y="Count",
-    text="Count",
-    color="SourceResult"
+    y="nik_count",
+    color="hit_type",
+    text="nik_count",
+    title="NIK Distribution per Source Result",
+    labels={
+        "nik_count": "Jumlah NIK",
+        "hit_type": "Kategori Hit"
+    }
 )
 
 st.plotly_chart(fig_src, use_container_width=True)
@@ -342,6 +365,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
