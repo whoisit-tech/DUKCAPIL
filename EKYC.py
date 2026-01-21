@@ -366,6 +366,14 @@ for nik, seq in nik_seq.items():
 def count_rows(nik_set):
     return df_f[df_f["Nik"].isin(nik_set)].shape[0]
 
+# ======================
+# HITUNG JUMLAH ROW (REQUEST) PER KATEGORI
+# ======================
+direct_cache_rows = count_rows(direct_cache)
+bca_cache_rows = count_rows(bca_cache)
+dukcapil_cache_rows = count_rows(dukcapil_cache)
+dukcapil_bca_cache_rows = count_rows(dukcapil_bca_cache)
+
 st.subheader("Cache Efficiency – DB_CACHE Breakdown (Per Row)")
 
 c1, c2 = st.columns(2)
@@ -429,6 +437,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
