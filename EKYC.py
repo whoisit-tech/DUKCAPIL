@@ -13,7 +13,7 @@ st.title("NIK Verification Monitoring Dashboard")
 # ======================
 # LOAD EXCEL FILE
 # ======================
-FILE_NAME = "LogDukcapil_2025.xlsx"
+FILE_NAME = "LogDukcapil(Sept-Nov).xlsx"
 
 if not Path(FILE_NAME).exists():
     st.error(f"❌ File '{FILE_NAME}' tidak ditemukan di folder app.py")
@@ -74,9 +74,8 @@ cache_hit_ratio = (df_f["SourceResult"] == "DB_CACHE").mean()
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Total Request", f"{total_request:,}")
 k2.metric("Unique NIK", f"{unique_nik:,}")
-k3.metric("Unique NIK (%)", f"{unique_nik:.2%}")
-k4.metric("Repeat NIK", f"{repeat_ratio:,}")
-k5.metric("Repeat NIK (%)", f"{repeat_ratio:.2%}")
+k3.metric("Repeat NIK (%)", f"{repeat_ratio:.2%}")
+k4.metric("Cache Hit Ratio", f"{cache_hit_ratio:.2%}")
 
 # ======================
 # SOURCE RESULT CHART
@@ -279,10 +278,6 @@ st.metric("DUKCAPIL → BCA → DB_CACHE Rows", len(df_dukapil_bca_cache))
 st.metric("BCA → DB_CACHE Rows", len(df_bca_cache))
 st.metric("DUKCAPIL → DB_CACHE Rows", len(df_dukcapil_cache))
 
-# Pastikan jumlah Repeat Paid Rows → Cache = total kategori non-overlap
-jumlah_repeat_paid_non_overlap = len(df_dukapil_bca_cache) + len(df_bca_cache) + len(df_dukcapil_cache)
-st.metric("Jumlah Repeat Paid Rows (Non-Overlap)", jumlah_repeat_paid_non_overlap)
-
 # ======================
 # PEAK TIME - HOURLY
 # ======================
@@ -330,6 +325,3 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
-
-
-
