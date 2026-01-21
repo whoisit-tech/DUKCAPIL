@@ -318,47 +318,94 @@ with st.expander("Raw Data"):
     st.dataframe(df_f, use_container_width=True)
 
 # ======================
-# CACHE EFFICIENCY / REPEAT PAID ANALYSIS NON-OVERLAP
+# CACHE EFFICIENCY / COST ANALYSIS
 # ======================
-st.subheader("Cache Efficiency / Repeat Paid Analysis (Per Row, Non-Overlap)")
+st.subheader("Cache Efficiency / Repeat Paid Analysis (Per NIK & Per Row)")
 
-# Semua baris DB_CACHE
-df_cache = df_f[df_f["SourceResult"] == "DB_CACHE"]
-
-# Urutkan dataframe
+# Urutkan data berdasarkan waktu
 df_sorted = df_f.sort_values("CreatedDate")
 
-# 1️⃣ DUKCAPIL → BCA → DB_CACHE (strict sequence)
-def dukcapil_bca_cache_row(row):
-    nik = row["Nik"]
-    s = df_sorted[df_sorted["Nik"] == nik]["SourceResult"].tolist()
-    return "DUKCAPIL" in s and "BCA" in s and "DB_CACHE" in s and s.index("DUKCAPIL") < s.index("BCA") < s.index("DB_CACHE")
+# Ambil sequence SourceResult per NIK
+nik_seq = (
+    df_sorted
+    .groupby("Nik")["SourceResult"]
+    .apply(list)
+)
 
-df_dukapil_bca_cache = df_cache[df_cache.apply(dukcapil_bca_cache_row, axis=1)]
+# Inisialisasi kategori (per NIK, non-overlap)
+direct_cache = set()
+bca_cache = set()
+dukcapil_cache = set()
+dukcapil_bca_cache = set()
 
-# 2️⃣ BCA → DB_CACHE (exclude kategori 1)
-nik_dukapil_bca = set(df_dukapil_bca_cache["Nik"])
-df_bca_cache = df_cache[(df_cache["Nik"].isin(df_f[df_f["SourceResult"] == "BCA"]["Nik"])) & (~df_cache["Nik"].isin(nik_dukapil_bca))]
+# Klasifikasi per NIK
+for nik, seq in nik_seq.items():
 
-# 3️⃣ DUKCAPIL → DB_CACHE (exclude kategori 1 & 2)
-nik_bca_only = set(df_bca_cache["Nik"])
-df_dukcapil_cache = df_cache[(df_cache["Nik"].isin(df_f[df_f["SourceResult"] == "DUKCAPIL"]["Nik"])) &
-                             (~df_cache["Nik"].isin(nik_dukapil_bca)) &
-                             (~df_cache["Nik"].isin(nik_bca_only))]
+    if "DB_CACHE" not in seq:
+        continue
 
-# 4️⃣ Direct Cache
-direct_cache_rows = df_cache[~df_cache["Nik"].isin(pd.concat([
-    df_f[df_f["SourceResult"] == "BCA"]["Nik"],
-    df_f[df_f["SourceResult"] == "DUKCAPIL"]["Nik"]
-]))]
+    # 1️⃣ Direct DB_CACHE
+    if seq == ["DB_CACHE"]:
+        direct_cache.add(nik)
 
-# Jumlah per kategori
-st.metric("Total DB_CACHE Rows", len(df_cache))
-st.metric("Direct Cache Rows", len(direct_cache_rows))
-st.metric("Repeat Paid Rows → Cache", len(df_cache) - len(direct_cache_rows))
-st.metric("DUKCAPIL → BCA → DB_CACHE Rows", len(df_dukapil_bca_cache))
-st.metric("BCA → DB_CACHE Rows", len(df_bca_cache))
-st.metric("DUKCAPIL → DB_CACHE Rows", len(df_dukcapil_cache))
+    # 2️⃣ DUKCAPIL → BCA → DB_CACHE
+    elif "DUKCAPIL" in seq and "BCA" in seq:
+        if seq.index("DUKCAPIL") < seq.index("BCA") < seq.index("DB_CACHE"):
+            dukcapil_bca_cache.add(nik)
+
+    # 3️⃣ BCA → DB_CACHE (tanpa DUKCAPIL)
+    elif "BCA" in seq and "DUKCAPIL" not in seq:
+        if seq.index("BCA") < seq.index("DB_CACHE"):
+            bca_cache.add(nik)
+
+    # 4️⃣ DUKCAPIL → DB_CACHE (tanpa BCA)
+    elif "DUKCAPIL" in seq and "BCA" not in seq:
+        if seq.index("DUKCAPIL") < seq.index("DB_CACHE"):
+            dukcapil_cache.add(nik)
+
+# Fungsi hitung row (request)
+def count_rows(nik_set):
+    return df_f[df_f["Nik"].isin(nik_set)].shape[0]
+
+# ======================
+# KPI OUTPUT
+# ======================
+c1, c2 = st.columns(2)
+c1.metric("Direct DB_CACHE (NIK)", len(direct_cache))
+c2.metric("Direct DB_CACHE (Rows)", count_rows(direct_cache))
+
+c3, c4 = st.columns(2)
+c3.metric("BCA → DB_CACHE (NIK)", len(bca_cache))
+c4.metric("BCA → DB_CACHE (Rows)", count_rows(bca_cache))
+
+c5, c6 = st.columns(2)
+c5.metric("DUKCAPIL → DB_CACHE (NIK)", len(dukcapil_cache))
+c6.metric("DUKCAPIL → DB_CACHE (Rows)", count_rows(dukcapil_cache))
+
+c7, c8 = st.columns(2)
+c7.metric("DUKCAPIL → BCA → DB_CACHE (NIK)", len(dukcapil_bca_cache))
+c8.metric("DUKCAPIL → BCA → DB_CACHE (Rows)", count_rows(dukcapil_bca_cache))
+
+# ======================
+# TOTAL SUMMARY
+# ======================
+total_nik_cache = (
+    len(direct_cache)
+    + len(bca_cache)
+    + len(dukcapil_cache)
+    + len(dukcapil_bca_cache)
+)
+
+total_rows_cache = count_rows(
+    direct_cache
+    | bca_cache
+    | dukcapil_cache
+    | dukcapil_bca_cache
+)
+
+st.markdown("---")
+st.metric("Total NIK with DB_CACHE", total_nik_cache)
+st.metric("Total DB_CACHE Related Rows", total_rows_cache)
 
 # ======================
 # PEAK TIME - HOURLY
@@ -407,6 +454,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
