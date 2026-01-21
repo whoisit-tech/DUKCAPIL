@@ -315,77 +315,7 @@ st.dataframe(
 # ======================
 with st.expander("Raw Data"):
     st.dataframe(df_f, use_container_width=True)
-
-# ======================
-# CACHE EFFICIENCY / COST ANALYSIS
-# ======================
-st.subheader("Cache Efficiency – DB_CACHE Origin (Per Row)")
-
-# Ambil hanya DB_CACHE rows
-df_cache = df_f[df_f["SourceResult"] == "DB_CACHE"].copy()
-
-# Urutkan full data
-df_sorted = df_f.sort_values("CreatedDate")
-
-# Counter
-direct_rows = 0
-bca_rows = 0
-dukcapil_rows = 0
-dukcapil_bca_rows = 0
-
-# Loop per DB_CACHE row
-for idx, row in df_cache.iterrows():
-    nik = row["Nik"]
-    created = row["CreatedDate"]
-
-    # Ambil history SEBELUM DB_CACHE ini
-    history = df_sorted[
-        (df_sorted["Nik"] == nik) &
-        (df_sorted["CreatedDate"] < created)
-    ]["SourceResult"].tolist()
-
-    if "BCA" not in history and "DUKCAPIL" not in history:
-        direct_rows += 1
-
-    elif "DUKCAPIL" in history and "BCA" in history:
-        if history.index("DUKCAPIL") < history.index("BCA"):
-            dukcapil_bca_rows += 1
-        else:
-            bca_rows += 1
-
-    elif "BCA" in history:
-        bca_rows += 1
-
-    elif "DUKCAPIL" in history:
-        dukcapil_rows += 1
-
-# ======================
-# HITUNG JUMLAH ROW (REQUEST) PER KATEGORI
-# ======================
-direct_cache_rows = count_rows(direct_cache)
-bca_cache_rows = count_rows(bca_cache)
-dukcapil_cache_rows = count_rows(dukcapil_cache)
-dukcapil_bca_cache_rows = count_rows(dukcapil_bca_cache)
-
-st.subheader("Cache Efficiency – DB_CACHE Breakdown (Per Row)")
-
-c1, c2 = st.columns(2)
-c1.metric("Direct DB_CACHE (Asli Cache)", direct_rows)
-c2.metric(
-    "Repeat Paid",
-    bca_rows + dukcapil_rows + dukcapil_bca_rows
-)
-
-c3, c4, c5 = st.columns(3)
-c3.metric("BCA → DB_CACHE", bca_rows)
-c4.metric("DUKCAPIL → DB_CACHE", dukcapil_rows)
-c5.metric("DUKCAPIL → BCA → DB_CACHE", dukcapil_bca_rows)
-
-st.markdown("---")
-st.metric(
-    "Total DB_CACHE Rows",
-    direct_rows + bca_rows + dukcapil_rows + dukcapil_bca_rows
-)
+    
 # ======================
 # PEAK TIME - HOURLY
 # ======================
@@ -433,6 +363,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
