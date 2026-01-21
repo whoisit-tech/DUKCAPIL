@@ -260,8 +260,9 @@ selected_nik = st.sidebar.selectbox(
 if selected_nik != "":
     df_nik = df[df["Nik"].astype(str) == selected_nik]
 else:
-    df_nik = pd.DataFrame()
+    df_nik = df.iloc[0:0]
 
+###
 
 # Ringkasan per Source
 nik_source = (
@@ -452,6 +453,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
