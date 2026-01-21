@@ -65,17 +65,35 @@ df_f = df[
 # ======================
 # KPI SECTION
 # ======================
-total_request = len(df_f)
-unique_nik = df_f["Nik"].nunique()
-repeat_nik = df_f["Nik"].value_counts()
-repeat_ratio = (repeat_nik > 1).sum() / unique_nik if unique_nik else 0
-cache_hit_ratio = (df_f["SourceResult"] == "DB_CACHE").mean()
 
+# Total request (jumlah row)
+total_request = len(df_f)
+
+# Hitung frekuensi NIK
+nik_counts = df_f["Nik"].value_counts()
+
+# Total NIK unik
+total_nik = nik_counts.count()
+
+# NIK hit 1 kali
+nik_hit_1 = (nik_counts == 1).sum()
+
+# NIK hit lebih dari 1 kali
+nik_hit_gt1 = (nik_counts > 1).sum()
+
+# Persentase
+pct_hit_1 = nik_hit_1 / total_nik if total_nik else 0
+pct_hit_gt1 = nik_hit_gt1 / total_nik if total_nik else 0
+
+# ======================
+# DISPLAY KPI
+# ======================
 k1, k2, k3, k4 = st.columns(4)
+
 k1.metric("Total Request", f"{total_request:,}")
-k2.metric("Unique NIK", f"{unique_nik:,}")
-k3.metric("Repeat NIK (%)", f"{repeat_ratio:.2%}")
-k4.metric("Cache Hit Ratio", f"{cache_hit_ratio:.2%}")
+k2.metric("NIK Hit 1x", f"{nik_hit_1:,}", f"{pct_hit_1:.2%}")
+k3.metric("NIK Hit >1x", f"{nik_hit_gt1:,}", f"{pct_hit_gt1:.2%}")
+k4.metric("Total Unique NIK", f"{total_nik:,}")
 
 # ======================
 # SOURCE RESULT CHART
@@ -325,4 +343,5 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
