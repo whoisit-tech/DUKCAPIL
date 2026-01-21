@@ -243,20 +243,27 @@ source_quality = (
 )
 
 st.dataframe(source_quality, use_container_width=True)
-
 # ======================
-# NIK DRILL DOWN
+# SIDEBAR - NIK DRILL DOWN
 # ======================
-st.subheader("NIK Drill Down")
+st.sidebar.subheader("🔍 NIK Drill Down")
 
-nik_list = df_f["Nik"].dropna().unique()
+nik_list = sorted(df["Nik"].dropna().astype(str).unique())
 
-selected_nik = st.selectbox(
-    "Pilih NIK",
-    options=sorted(nik_list)
+nik_options = [""] + nik_list  # opsi kosong
+
+selected_nik = st.sidebar.selectbox(
+    "Cari NIK",
+    options=nik_options,
+    format_func=lambda x: "Ketik NIK..." if x == "" else x
 )
 
-df_nik = df_f[df_f["Nik"] == selected_nik]
+# Drill-down data
+if selected_nik != "":
+    df_nik = df[df["Nik"].astype(str) == selected_nik]
+else:
+    df_nik = pd.DataFrame()
+
 
 # Ringkasan per Source
 nik_source = (
@@ -400,6 +407,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
