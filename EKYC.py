@@ -74,8 +74,9 @@ cache_hit_ratio = (df_f["SourceResult"] == "DB_CACHE").mean()
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Total Request", f"{total_request:,}")
 k2.metric("Unique NIK", f"{unique_nik:,}")
-k3.metric("Repeat NIK (%)", f"{repeat_ratio:.2%}")
-k4.metric("Cache Hit Ratio", f"{cache_hit_ratio:.2%}")
+k3.metric("Unique NIK (%)", f"{unique_nik:.2%}")
+k4.metric("Repeat NIK", f"{repeat_ratio:,}")
+k5.metric("Repeat NIK (%)", f"{repeat_ratio:.2%}")
 
 # ======================
 # SOURCE RESULT CHART
@@ -329,5 +330,6 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
