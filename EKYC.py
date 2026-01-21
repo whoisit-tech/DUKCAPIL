@@ -283,47 +283,6 @@ jumlah_repeat_paid_non_overlap = len(df_dukapil_bca_cache) + len(df_bca_cache) +
 st.metric("Jumlah Repeat Paid Rows (Non-Overlap)", jumlah_repeat_paid_non_overlap)
 
 # ======================
-# COST SIMULATION (BUSINESS ASSUMPTION)
-# ======================
-
-COST_DUKCAPIL = 1000
-COST_BCA = 150
-COST_CACHE = 0
-
-df_f["Cost"] = df_f["SourceResult"].map({
-    "DUKCAPIL": COST_DUKCAPIL,
-    "BCA": COST_BCA,
-    "DB_CACHE": COST_CACHE
-})
-
-total_cost = df_f["Cost"].sum()
-potential_saving = (df_f["SourceResult"] == "DB_CACHE").sum() * COST_DUKCAPIL
-
-c1, c2, c3 = st.columns(3)
-c1.metric("Total Verification Cost", f"Rp {total_cost:,.0f}")
-c2.metric("Cache Cost Saving (Est.)", f"Rp {potential_saving:,.0f}")
-c3.metric("Avg Cost per Request", f"Rp {total_cost / len(df_f):,.0f}")
-
-# ======================
-# REPEAT PAID ANALYSIS
-# ======================
-
-nik_paid = df_f[df_f["SourceResult"].isin(["DUKCAPIL", "BCA"])]
-repeat_paid = nik_paid["Nik"].value_counts().reset_index()
-repeat_paid.columns = ["Nik", "Paid_Count"]
-
-repeat_paid = repeat_paid[repeat_paid["Paid_Count"] > 1]
-
-repeat_paid_cost = repeat_paid["Paid_Count"].sum() * COST_DUKCAPIL
-
-st.subheader("Repeat Paid Cost Leakage")
-
-st.metric("Repeat Paid NIK Count", len(repeat_paid))
-st.metric("Estimated Cost Leakage", f"Rp {repeat_paid_cost:,.0f}")
-
-st.dataframe(repeat_paid.head(20), use_container_width=True)
-
-# ======================
 # PEAK TIME - HOURLY
 # ======================
 st.subheader("Peak Time – Hourly Request")
@@ -371,22 +330,4 @@ fig_day = px.bar(
 )
 st.plotly_chart(fig_day, use_container_width=True)
 
-# ======================
-# PEAK COST BY HOUR
-# ======================
-st.subheader("Most Expensive Hour")
-
-hour_cost = (
-    df_f.groupby("Hour")["Cost"]
-    .sum()
-    .reset_index()
-)
-
-fig_hour_cost = px.bar(
-    hour_cost,
-    x="Hour",
-    y="Cost",
-    text="Cost"
-)
-st.plotly_chart(fig_hour_cost, use_container_width=True)
 
