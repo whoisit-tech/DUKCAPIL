@@ -94,9 +94,10 @@ k3.metric("NIK Hit >1x", f"{nik_hit_gt1:,}", f"{pct_hit_gt1:.2%}")
 k4.metric("Total Request", f"{len(df_f):,}")
 
 # ======================
-# SOURCE RESULT - STACKED BAR (NIK HIT)
 # ======================
-st.subheader("Source Result Distribution (NIK Hit)")
+# SOURCE RESULT - STACKED BAR (NIK + TOTAL REQUEST)
+# ======================
+st.subheader("Source Result Distribution (NIK vs Request)")
 
 # Hitung hit per NIK per SourceResult
 nik_source = (
@@ -106,34 +107,68 @@ nik_source = (
     .reset_index(name="hit_count")
 )
 
-# Kategorisasi hit
 nik_source["hit_type"] = nik_source["hit_count"].apply(
     lambda x: "Hit 1x" if x == 1 else "Hit >1x"
 )
 
-# Agregasi per SourceResult
-src_stack = (
+# Agregasi NIK
+src_nik_stack = (
     nik_source
     .groupby(["SourceResult", "hit_type"])
     .size()
     .reset_index(name="nik_count")
 )
 
-# Plot stacked bar
+# Total request per source
+src_request = (
+    df_f
+    .groupby("SourceResult")
+    .size()
+    .reset_index(name="total_request")
+)
+
+# Merge supaya bisa kasih label request
+src_chart = src_nik_stack.merge(
+    src_request,
+    on="SourceResult",
+    how="left"
+)
+
+# Plot
 fig_src = px.bar(
-    src_stack,
+    src_chart,
     x="SourceResult",
     y="nik_count",
     color="hit_type",
     text="nik_count",
-    title="NIK Distribution per Source Result",
+    title="NIK Distribution per Source Result (with Total Request)",
     labels={
         "nik_count": "Jumlah NIK",
         "hit_type": "Kategori Hit"
     }
 )
 
+# Tambahin total request di atas bar
+fig_src.update_traces(
+    textposition="inside"
+)
+
+fig_src.for_each_xaxis(
+    lambda axis: axis.update(categoryorder="total descending")
+)
+
+# Tambah anotasi total request
+for i, row in src_request.iterrows():
+    fig_src.add_annotation(
+        x=row["SourceResult"],
+        y=src_nik_stack[src_nik_stack["SourceResult"] == row["SourceResult"]]["nik_count"].sum(),
+        text=f"Req: {row['total_request']:,}",
+        showarrow=False,
+        yshift=10
+    )
+
 st.plotly_chart(fig_src, use_container_width=True)
+
 
 # ======================
 # STATUS RECAP
@@ -365,6 +400,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
