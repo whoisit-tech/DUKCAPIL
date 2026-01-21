@@ -319,52 +319,45 @@ with st.expander("Raw Data"):
 # ======================
 # CACHE EFFICIENCY / COST ANALYSIS
 # ======================
-st.subheader("Cache Efficiency / Repeat Paid Analysis (Per NIK & Per Row)")
+st.subheader("Cache Efficiency – DB_CACHE Origin (Per Row)")
 
-# Urutkan data berdasarkan waktu
+# Ambil hanya DB_CACHE rows
+df_cache = df_f[df_f["SourceResult"] == "DB_CACHE"].copy()
+
+# Urutkan full data
 df_sorted = df_f.sort_values("CreatedDate")
 
-# Ambil sequence SourceResult per NIK
-nik_seq = (
-    df_sorted
-    .groupby("Nik")["SourceResult"]
-    .apply(list)
-)
+# Counter
+direct_rows = 0
+bca_rows = 0
+dukcapil_rows = 0
+dukcapil_bca_rows = 0
 
-# Inisialisasi kategori (per NIK, non-overlap)
-direct_cache = set()
-bca_cache = set()
-dukcapil_cache = set()
-dukcapil_bca_cache = set()
+# Loop per DB_CACHE row
+for idx, row in df_cache.iterrows():
+    nik = row["Nik"]
+    created = row["CreatedDate"]
 
-# Klasifikasi per NIK
-for nik, seq in nik_seq.items():
+    # Ambil history SEBELUM DB_CACHE ini
+    history = df_sorted[
+        (df_sorted["Nik"] == nik) &
+        (df_sorted["CreatedDate"] < created)
+    ]["SourceResult"].tolist()
 
-    if "DB_CACHE" not in seq:
-        continue
+    if "BCA" not in history and "DUKCAPIL" not in history:
+        direct_rows += 1
 
-    # 1️⃣ Direct DB_CACHE
-    if seq == ["DB_CACHE"]:
-        direct_cache.add(nik)
+    elif "DUKCAPIL" in history and "BCA" in history:
+        if history.index("DUKCAPIL") < history.index("BCA"):
+            dukcapil_bca_rows += 1
+        else:
+            bca_rows += 1
 
-    # 2️⃣ DUKCAPIL → BCA → DB_CACHE
-    elif "DUKCAPIL" in seq and "BCA" in seq:
-        if seq.index("DUKCAPIL") < seq.index("BCA") < seq.index("DB_CACHE"):
-            dukcapil_bca_cache.add(nik)
+    elif "BCA" in history:
+        bca_rows += 1
 
-    # 3️⃣ BCA → DB_CACHE (tanpa DUKCAPIL)
-    elif "BCA" in seq and "DUKCAPIL" not in seq:
-        if seq.index("BCA") < seq.index("DB_CACHE"):
-            bca_cache.add(nik)
-
-    # 4️⃣ DUKCAPIL → DB_CACHE (tanpa BCA)
-    elif "DUKCAPIL" in seq and "BCA" not in seq:
-        if seq.index("DUKCAPIL") < seq.index("DB_CACHE"):
-            dukcapil_cache.add(nik)
-
-# Fungsi hitung row (request)
-def count_rows(nik_set):
-    return df_f[df_f["Nik"].isin(nik_set)].shape[0]
+    elif "DUKCAPIL" in history:
+        dukcapil_rows += 1
 
 # ======================
 # HITUNG JUMLAH ROW (REQUEST) PER KATEGORI
@@ -377,18 +370,21 @@ dukcapil_bca_cache_rows = count_rows(dukcapil_bca_cache)
 st.subheader("Cache Efficiency – DB_CACHE Breakdown (Per Row)")
 
 c1, c2 = st.columns(2)
-c1.metric("Direct DB_CACHE", direct_cache_rows)
-c2.metric("Repeat Paid", bca_cache_rows + dukcapil_cache_rows + dukcapil_bca_cache_rows)
+c1.metric("Direct DB_CACHE (Asli Cache)", direct_rows)
+c2.metric(
+    "Repeat Paid",
+    bca_rows + dukcapil_rows + dukcapil_bca_rows
+)
 
 c3, c4, c5 = st.columns(3)
-c3.metric("BCA → DB_CACHE", bca_cache_rows)
-c4.metric("DUKCAPIL → DB_CACHE", dukcapil_cache_rows)
-c5.metric("DUKCAPIL + BCA → DB_CACHE", dukcapil_bca_cache_rows)
+c3.metric("BCA → DB_CACHE", bca_rows)
+c4.metric("DUKCAPIL → DB_CACHE", dukcapil_rows)
+c5.metric("DUKCAPIL → BCA → DB_CACHE", dukcapil_bca_rows)
 
 st.markdown("---")
 st.metric(
     "Total DB_CACHE Rows",
-    direct_cache_rows + bca_cache_rows + dukcapil_cache_rows + dukcapil_bca_cache_rows
+    direct_rows + bca_rows + dukcapil_rows + dukcapil_bca_rows
 )
 # ======================
 # PEAK TIME - HOURLY
@@ -437,6 +433,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
