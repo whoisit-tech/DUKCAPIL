@@ -13,7 +13,7 @@ st.title("NIK Verification Monitoring Dashboard")
 # ======================
 # LOAD EXCEL FILE
 # ======================
-FILE_NAME = "LogDukcapil_2025.xlsx"
+FILE_NAME = "LogDUKCAPIL_2025 (1).xlsx"
 
 if not Path(FILE_NAME).exists():
     st.error(f"❌ File '{FILE_NAME}' tidak ditemukan di folder app.py")
@@ -363,6 +363,7 @@ fig_day = px.bar(
     text="Total_Request"
 )
 st.plotly_chart(fig_day, use_container_width=True)
+
 
 
 
