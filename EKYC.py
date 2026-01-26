@@ -5,11 +5,11 @@ import plotly.graph_objects as go
 from pathlib import Path
 
 st.set_page_config(
-    page_title="NIK Verification Dashboard",
+    page_title="Dashboard Verifikasi NIK",
     layout="wide"
 )
 
-st.title("NIK Verification Monitoring Dashboard")
+st.title("Dashboard Monitoring Verifikasi NIK")
 
 # ======================
 # LOAD EXCEL FILE
@@ -42,10 +42,10 @@ for c in status_cols:
 # ======================
 # SIDEBAR FILTER
 # ======================
-st.sidebar.header("Filter")
+st.sidebar.header("🎯 Filter Data")
 
 source_filter = st.sidebar.multiselect(
-    "SourceResult",
+    "Sumber Hasil",
     options=sorted(df["SourceResult"].dropna().unique()),
     default=sorted(df["SourceResult"].dropna().unique())
 )
@@ -54,7 +54,7 @@ date_min = df["CreatedDate"].min().date()
 date_max = df["CreatedDate"].max().date()
 
 date_range = st.sidebar.date_input(
-    "Tanggal",
+    "Periode Tanggal",
     [date_min, date_max]
 )
 
@@ -92,13 +92,13 @@ k1, k2, k3, k4 = st.columns(4)
 k1.metric("Total NIK", f"{total_nik:,}")
 k2.metric("NIK Hit 1x", f"{nik_hit_1:,}", f"{pct_hit_1:.2%}")
 k3.metric("NIK Hit >1x", f"{nik_hit_gt1:,}", f"{pct_hit_gt1:.2%}")
-k4.metric("Total Request", f"{len(df_f):,}")
+k4.metric("Total Permintaan", f"{len(df_f):,}")
 
 # ======================
 # TAMBAHAN: ANALYTICAL METRICS
 # ======================
 st.markdown("---")
-st.subheader(" Analytical Insights")
+st.subheader("📊 Metrik Analitik")
 
 total_requests = len(df_f)
 duplicate_requests = total_requests - total_nik
@@ -114,15 +114,15 @@ sesuai_count = (df_f[status_cols] == "Sesuai").sum().sum()
 quality_score = sesuai_count / total_fields if total_fields > 0 else 0
 
 ka1, ka2, ka3 = st.columns(3)
-ka1.metric("Duplicate Rate", f"{duplicate_rate:.1%}", f"{duplicate_requests:,} wasted requests")
-ka2.metric("Fraud Risk (>5x)", f"{risk_rate:.1%}", f"{high_risk_nik:,} suspicious NIK")
-ka3.metric("Data Quality", f"{quality_score:.1%}", "overall field accuracy")
+ka1.metric("Tingkat Duplikasi", f"{duplicate_rate:.1%}", f"{duplicate_requests:,} permintaan terbuang")
+ka2.metric("Risiko Fraud (>5x)", f"{risk_rate:.1%}", f"{high_risk_nik:,} NIK mencurigakan")
+ka3.metric("Kualitas Data", f"{quality_score:.1%}", "akurasi field keseluruhan")
 
 # ======================
 # ======================
 # SOURCE RESULT - STACKED BAR (NIK + TOTAL REQUEST)
 # ======================
-st.subheader("Source Result Distribution (NIK vs Request)")
+st.subheader("Distribusi Sumber Hasil (NIK vs Permintaan)")
 
 # Hitung hit per NIK per SourceResult
 nik_source = (
@@ -166,7 +166,7 @@ fig_src = px.bar(
     y="nik_count",
     color="hit_type",
     text="nik_count",
-    title="NIK Distribution per Source Result (with Total Request)",
+    title="Distribusi NIK per Sumber Hasil (dengan Total Permintaan)",
     labels={
         "nik_count": "Jumlah NIK",
         "hit_type": "Kategori Hit"
@@ -195,7 +195,7 @@ st.plotly_chart(fig_src, use_container_width=True)
 # ======================
 # TAMBAHAN: SOURCE PERFORMANCE ANALYSIS
 # ======================
-st.subheader(" Source Performance Analysis")
+st.subheader("🎯 Analisis Performa Sumber Data")
 
 source_quality = df_f.groupby("SourceResult")[status_cols].apply(
     lambda x: (x == "Sesuai").sum().sum() / (len(x) * len(status_cols))
@@ -211,7 +211,7 @@ source_perf["Duplicate_Rate"] = 1 - source_perf["Cost_Efficiency"]
 fig_perf = go.Figure()
 
 fig_perf.add_trace(go.Bar(
-    name="Quality Score",
+    name="Skor Kualitas",
     x=source_perf["SourceResult"],
     y=source_perf["Quality_Score"],
     yaxis="y",
@@ -219,7 +219,7 @@ fig_perf.add_trace(go.Bar(
 ))
 
 fig_perf.add_trace(go.Scatter(
-    name="Cost Efficiency",
+    name="Efisiensi Biaya",
     x=source_perf["SourceResult"],
     y=source_perf["Cost_Efficiency"],
     yaxis="y2",
@@ -229,9 +229,9 @@ fig_perf.add_trace(go.Scatter(
 ))
 
 fig_perf.update_layout(
-    title="Quality vs Efficiency Trade-off by Source",
-    yaxis=dict(title="Quality Score", range=[0, 1]),
-    yaxis2=dict(title="Cost Efficiency", overlaying="y", side="right", range=[0, 1]),
+    title="Trade-off Kualitas vs Efisiensi per Sumber",
+    yaxis=dict(title="Skor Kualitas", range=[0, 1]),
+    yaxis2=dict(title="Efisiensi Biaya", overlaying="y", side="right", range=[0, 1]),
     hovermode="x unified"
 )
 
@@ -272,7 +272,7 @@ st.plotly_chart(fig_status, use_container_width=True)
 # ======================
 # TAMBAHAN: FIELD ACCURACY RANKING
 # ======================
-st.subheader(" Field Accuracy Ranking")
+st.subheader("🎯 Field Accuracy Ranking")
 
 field_accuracy = (df_f[status_cols] == "Sesuai").mean() * 100
 field_df = field_accuracy.reset_index()
@@ -313,7 +313,7 @@ st.dataframe(repeat_table, use_container_width=True)
 # ======================
 # TAMBAHAN: FRAUD RISK VISUALIZATION
 # ======================
-st.subheader(" Fraud Risk Analysis - Top 10 Suspicious NIK")
+st.subheader("⚠️ Fraud Risk Analysis - Top 10 Suspicious NIK")
 
 top_repeat = nik_counts.nlargest(10).reset_index()
 top_repeat.columns = ["NIK", "Hit_Count"]
@@ -355,7 +355,7 @@ st.plotly_chart(fig_trend, use_container_width=True)
 # ======================
 # TAMBAHAN: TREND WITH UNIQUE NIK
 # ======================
-st.subheader(" Request vs Unique NIK Trend")
+st.subheader("📈 Request vs Unique NIK Trend")
 
 daily_detailed = df_f.groupby(df_f["CreatedDate"].dt.date).agg({
     "Nik": ["count", "nunique"]
@@ -474,16 +474,16 @@ st.plotly_chart(fig_day, use_container_width=True)
 # FRAUD DETECTION ANALYSIS
 # ======================
 st.markdown("---")
-st.subheader(" Fraud Detection & Anomaly Analysis")
+st.subheader("🚨 Deteksi Fraud & Anomali")
 
 # 1. SAME APP ID ANOMALY
-st.markdown("###  Same SourceApps Pattern (Potential Bot/Script)")
+st.markdown("### 1️⃣ Pola SourceApps yang Sama (Potensi Bot/Script)")
 
 same_app = df_f.groupby(["SourceApps", "Nik"]).size().reset_index(name="Hit_Count")
 same_app_suspicious = same_app[same_app["Hit_Count"] > 3].sort_values("Hit_Count", ascending=False)
 
 if len(same_app_suspicious) > 0:
-    st.error(f" Ditemukan **{len(same_app_suspicious)}** kombinasi SourceApps-NIK dengan hit >3x")
+    st.error(f"⚠️ Ditemukan **{len(same_app_suspicious)}** kombinasi SourceApps-NIK dengan hit >3x")
     
     # Group by app
     app_summary = same_app_suspicious.groupby("SourceApps").agg({
@@ -507,115 +507,147 @@ if len(same_app_suspicious) > 0:
             x="SourceApps",
             y="Total_Hits",
             color="Unique_NIK",
-            title="Top Suspicious SourceApps",
+            title="Top SourceApps Mencurigakan",
             text="Total_Hits"
         )
         st.plotly_chart(fig_app, use_container_width=True)
     
-    st.markdown("**Detail Top Suspicious Patterns:**")
+    st.markdown("**Detail Pola Mencurigakan:**")
     st.dataframe(
         same_app_suspicious.head(20),
         use_container_width=True
     )
 else:
-    st.success(" Tidak ada pola suspicious pada SourceApps")
+    st.success("✅ Tidak ada pola mencurigakan pada SourceApps")
 
-# 2. STATUS INCONSISTENCY (Multiple status dalam 1 NIK)
-st.markdown("###  Status Inconsistency (Data Instability)")
+# 2. STATUS DEGRADATION (Sesuai → Tidak Sesuai)
+st.markdown("### 2️⃣ Analisis Degradasi Status (Sesuai → Tidak Sesuai)")
 
-# Cari NIK dengan status yang berubah-ubah (tidak konsisten)
-inconsistency_results = []
+# Cari NIK dengan pattern Sesuai → Tidak Sesuai berdasarkan history
+degradation_results = []
 
 for nik in df_f["Nik"].unique():
     df_nik_check = df_f[df_f["Nik"] == nik].sort_values("CreatedDate")
     
     if len(df_nik_check) > 1:
         for col in status_cols:
-            unique_statuses = df_nik_check[col].unique()
+            statuses = df_nik_check[col].tolist()
+            dates = df_nik_check["CreatedDate"].tolist()
+            sources = df_nik_check["SourceResult"].tolist()
+            apps = df_nik_check["SourceApps"].tolist()
             
-            # Jika ada lebih dari 1 status untuk field yang sama
-            if len(unique_statuses) > 1 and "-" not in unique_statuses:
-                status_sequence = df_nik_check[col].tolist()
-                
-                inconsistency_results.append({
-                    "NIK": nik,
-                    "Field": col,
-                    "Status_Sequence": " → ".join(status_sequence[:5]),  # Max 5 untuk display
-                    "Unique_Statuses": len(unique_statuses),
-                    "Total_Hits": len(df_nik_check),
-                    "First_Date": df_nik_check.iloc[0]["CreatedDate"],
-                    "Last_Date": df_nik_check.iloc[-1]["CreatedDate"],
-                    "Sources_Used": ", ".join(df_nik_check["SourceResult"].unique()),
-                    "SourceApps": df_nik_check.iloc[0]["SourceApps"]
-                })
+            # Cek ada pattern Sesuai diikuti Tidak Sesuai dalam chronological order
+            for i in range(len(statuses)-1):
+                if statuses[i] == "Sesuai" and statuses[i+1] == "Tidak Sesuai":
+                    degradation_results.append({
+                        "NIK": nik,
+                        "Field": col,
+                        "Status_Awal": "Sesuai",
+                        "Status_Akhir": "Tidak Sesuai",
+                        "Tanggal_Cek_Pertama": dates[i],
+                        "Tanggal_Degradasi": dates[i+1],
+                        "Selisih_Waktu_Jam": (dates[i+1] - dates[i]).total_seconds() / 3600,
+                        "Sumber_Pertama": sources[i],
+                        "Sumber_Degradasi": sources[i+1],
+                        "App_Pertama": apps[i],
+                        "App_Degradasi": apps[i+1],
+                        "Total_Hit_NIK": len(df_nik_check)
+                    })
 
-if len(inconsistency_results) > 0:
-    df_inconsist = pd.DataFrame(inconsistency_results)
+if len(degradation_results) > 0:
+    df_degrade = pd.DataFrame(degradation_results)
     
-    st.warning(f" Ditemukan **{len(df_inconsist)}** kasus status inconsistency")
+    st.error(f"🔴 **CRITICAL**: Ditemukan **{len(df_degrade)}** kasus degradasi status (Sesuai → Tidak Sesuai)")
+    
+    # Summary metrics
+    col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
+    col_sum1.metric("Total Kasus", len(df_degrade))
+    col_sum2.metric("NIK Terpengaruh", df_degrade["NIK"].nunique())
+    col_sum3.metric("Rata² Selisih Waktu", f"{df_degrade['Selisih_Waktu_Jam'].mean():.1f} jam")
+    col_sum4.metric("Field Paling Terpengaruh", df_degrade["Field"].value_counts().index[0])
     
     # Summary by field
-    inconsist_summary = df_inconsist.groupby("Field").agg({
-        "NIK": "count",
-        "Total_Hits": "sum"
+    degrade_by_field = df_degrade.groupby("Field").agg({
+        "NIK": "nunique",
+        "Selisih_Waktu_Jam": "mean"
     }).reset_index()
-    inconsist_summary.columns = ["Field", "Affected_NIK", "Total_Inconsistent_Hits"]
-    inconsist_summary = inconsist_summary.sort_values("Affected_NIK", ascending=False)
+    degrade_by_field.columns = ["Field", "NIK_Terpengaruh", "Rata_Selisih_Waktu_Jam"]
+    degrade_by_field = degrade_by_field.sort_values("NIK_Terpengaruh", ascending=False)
     
-    col_inconsist1, col_inconsist2 = st.columns([1, 2])
+    col_deg1, col_deg2 = st.columns([1, 2])
     
-    with col_inconsist1:
-        st.dataframe(inconsist_summary, use_container_width=True)
-        
-        # Metric summary
-        st.metric("Total Affected NIK", len(df_inconsist["NIK"].unique()))
-        st.metric("Most Unstable Field", inconsist_summary.iloc[0]["Field"])
+    with col_deg1:
+        st.markdown("**Degradasi per Field:**")
+        st.dataframe(degrade_by_field, use_container_width=True)
     
-    with col_inconsist2:
-        fig_inconsist = px.bar(
-            inconsist_summary,
+    with col_deg2:
+        fig_degrade = px.bar(
+            degrade_by_field,
             x="Field",
-            y="Affected_NIK",
-            title="Status Inconsistency by Field",
-            color="Affected_NIK",
-            color_continuous_scale="Oranges",
-            text="Affected_NIK"
+            y="NIK_Terpengaruh",
+            title="Degradasi Status per Field",
+            color="NIK_Terpengaruh",
+            color_continuous_scale="Reds",
+            text="NIK_Terpengaruh"
         )
-        fig_inconsist.update_traces(textposition='outside')
-        st.plotly_chart(fig_inconsist, use_container_width=True)
+        fig_degrade.update_traces(textposition='outside')
+        st.plotly_chart(fig_degrade, use_container_width=True)
     
-    st.markdown("**Detail Inconsistency Cases (Top 20):**")
+    # Summary by Source
+    st.markdown("**Degradasi per Transisi Sumber:**")
+    degrade_by_source = df_degrade.groupby(["Sumber_Pertama", "Sumber_Degradasi"]).size().reset_index(name="Jumlah")
+    degrade_by_source = degrade_by_source.sort_values("Jumlah", ascending=False)
+    
+    col_src1, col_src2 = st.columns([1, 1])
+    
+    with col_src1:
+        st.dataframe(degrade_by_source, use_container_width=True)
+    
+    with col_src2:
+        fig_source_degrade = px.bar(
+            degrade_by_source.head(10),
+            x="Jumlah",
+            y=[f"{row['Sumber_Pertama']} → {row['Sumber_Degradasi']}" for _, row in degrade_by_source.head(10).iterrows()],
+            orientation='h',
+            title="Top 10 Pola Transisi Sumber",
+            color="Jumlah",
+            color_continuous_scale="Reds"
+        )
+        st.plotly_chart(fig_source_degrade, use_container_width=True)
+    
+    # FULL TABLE - SEMUA DATA
+    st.markdown("---")
+    st.markdown(f"**📋 Log Degradasi Lengkap - Semua {len(df_degrade)} Kasus:**")
+    
+    # Format untuk display
+    df_degrade_display = df_degrade.copy()
+    df_degrade_display["Tanggal_Cek_Pertama"] = df_degrade_display["Tanggal_Cek_Pertama"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    df_degrade_display["Tanggal_Degradasi"] = df_degrade_display["Tanggal_Degradasi"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    df_degrade_display["Selisih_Waktu_Jam"] = df_degrade_display["Selisih_Waktu_Jam"].round(2)
+    
+    # Sort by degraded date descending
+    df_degrade_display = df_degrade_display.sort_values("Tanggal_Degradasi", ascending=False)
+    
     st.dataframe(
-        df_inconsist.sort_values("Total_Hits", ascending=False).head(20),
-        use_container_width=True
+        df_degrade_display,
+        use_container_width=True,
+        height=600
     )
     
-    # Tambahan: Cek pattern Sesuai → Tidak Sesuai specifically
-    sesuai_to_tidak = []
-    for nik in df_f["Nik"].unique():
-        df_nik_check = df_f[df_f["Nik"] == nik].sort_values("CreatedDate")
-        if len(df_nik_check) > 1:
-            for col in status_cols:
-                statuses = df_nik_check[col].tolist()
-                # Cek ada pattern Sesuai diikuti Tidak Sesuai
-                for i in range(len(statuses)-1):
-                    if statuses[i] == "Sesuai" and statuses[i+1] == "Tidak Sesuai":
-                        sesuai_to_tidak.append({
-                            "NIK": nik,
-                            "Field": col,
-                            "When": df_nik_check.iloc[i+1]["CreatedDate"]
-                        })
-                        break
-    
-    if len(sesuai_to_tidak) > 0:
-        st.error(f" **CRITICAL**: {len(sesuai_to_tidak)} cases of 'Sesuai' → 'Tidak Sesuai' flip detected!")
-        st.dataframe(pd.DataFrame(sesuai_to_tidak).head(10), use_container_width=True)
+    # Download button
+    csv = df_degrade_display.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Log Degradasi Lengkap (CSV)",
+        data=csv,
+        file_name=f"log_degradasi_status_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv"
+    )
     
 else:
-    st.success(" Tidak ada status inconsistency - Data stabil")
+    st.success("✅ Tidak ada degradasi status - Semua verifikasi konsisten")
 
 # 3. RAPID FIRE PATTERN (Multiple hits dalam waktu singkat)
-st.markdown("### 3️ Rapid Fire Pattern (Bot Detection)")
+st.markdown("### 3️⃣ Pola Rapid Fire (Deteksi Bot)")
 
 df_f_sorted = df_f.sort_values(["Nik", "CreatedDate"])
 df_f_sorted["Time_Diff"] = df_f_sorted.groupby("Nik")["CreatedDate"].diff().dt.total_seconds()
@@ -624,14 +656,14 @@ df_f_sorted["Time_Diff"] = df_f_sorted.groupby("Nik")["CreatedDate"].diff().dt.t
 rapid_fire = df_f_sorted[df_f_sorted["Time_Diff"] < 5].copy()
 
 if len(rapid_fire) > 0:
-    st.error(f" Ditemukan **{len(rapid_fire)}** request dengan interval <5 detik (possible bot)")
+    st.error(f"⚠️ Ditemukan **{len(rapid_fire)}** permintaan dengan interval <5 detik (kemungkinan bot)")
     
     rapid_summary = rapid_fire.groupby("Nik").agg({
         "Id": "count",
         "Time_Diff": "mean",
         "SourceApps": lambda x: x.iloc[0]
     }).reset_index()
-    rapid_summary.columns = ["NIK", "Rapid_Hits", "Avg_Interval_Sec", "SourceApps"]
+    rapid_summary.columns = ["NIK", "Rapid_Hits", "Rata_Interval_Detik", "SourceApps"]
     rapid_summary = rapid_summary.sort_values("Rapid_Hits", ascending=False)
     
     col_rapid1, col_rapid2 = st.columns([1, 1])
@@ -645,20 +677,20 @@ if len(rapid_fire) > 0:
     with col_rapid2:
         fig_rapid = px.scatter(
             rapid_summary.head(20),
-            x="Avg_Interval_Sec",
+            x="Rata_Interval_Detik",
             y="Rapid_Hits",
             size="Rapid_Hits",
             color="Rapid_Hits",
             hover_data=["NIK", "SourceApps"],
-            title="Rapid Fire Pattern Analysis",
+            title="Analisis Pola Rapid Fire",
             color_continuous_scale="Reds"
         )
         st.plotly_chart(fig_rapid, use_container_width=True)
 else:
-    st.success(" Tidak ada rapid fire pattern")
+    st.success("✅ Tidak ada pola rapid fire")
 
 # 4. CROSS-SOURCE INCONSISTENCY
-st.markdown("###  Cross-Source Data Inconsistency")
+st.markdown("### 4️⃣ Inkonsistensi Data Antar Sumber")
 
 cross_inconsistency = []
 
@@ -673,18 +705,18 @@ for nik in df_f["Nik"].unique():
                 cross_inconsistency.append({
                     "NIK": nik,
                     "Field": col,
-                    "Sources": ", ".join(statuses_by_source.index.tolist()),
-                    "Values": ", ".join(statuses_by_source.values.tolist()),
-                    "Hit_Count": len(df_nik_cross)
+                    "Sumber": ", ".join(statuses_by_source.index.tolist()),
+                    "Nilai": ", ".join(statuses_by_source.values.tolist()),
+                    "Total_Hit": len(df_nik_cross)
                 })
 
 if len(cross_inconsistency) > 0:
     df_cross = pd.DataFrame(cross_inconsistency)
     
-    st.warning(f" Ditemukan **{len(df_cross)}** kasus inconsistency antar source")
+    st.warning(f"⚠️ Ditemukan **{len(df_cross)}** kasus inkonsistensi antar sumber")
     
-    cross_summary = df_cross.groupby("Field").size().reset_index(name="Inconsistency_Count")
-    cross_summary = cross_summary.sort_values("Inconsistency_Count", ascending=False)
+    cross_summary = df_cross.groupby("Field").size().reset_index(name="Jumlah_Inkonsistensi")
+    cross_summary = cross_summary.sort_values("Jumlah_Inkonsistensi", ascending=False)
     
     col_cross1, col_cross2 = st.columns([1, 2])
     
@@ -695,74 +727,216 @@ if len(cross_inconsistency) > 0:
         fig_cross = px.bar(
             cross_summary,
             x="Field",
-            y="Inconsistency_Count",
-            title="Cross-Source Inconsistency by Field",
-            color="Inconsistency_Count",
+            y="Jumlah_Inkonsistensi",
+            title="Inkonsistensi Antar Sumber per Field",
+            color="Jumlah_Inkonsistensi",
             color_continuous_scale="Oranges"
         )
         st.plotly_chart(fig_cross, use_container_width=True)
     
-    st.markdown("**Detail Inconsistency Cases (Top 20):**")
+    st.markdown("**Detail Kasus Inkonsistensi (Top 20):**")
     st.dataframe(
         df_cross.head(20),
         use_container_width=True
     )
 else:
-    st.success(" Data konsisten antar source")
+    st.success("✅ Data konsisten antar sumber")
+
+# ======================
+# INSIGHT BARU: USER BEHAVIOR ANALYSIS
+# ======================
+st.markdown("### 5️⃣ Analisis Pola Perilaku Pengguna")
+
+# Analisis waktu response user
+user_behavior = df_f.groupby("SourceApps").agg({
+    "Nik": "nunique",
+    "Id": "count",
+    "CreatedDate": lambda x: (x.max() - x.min()).total_seconds() / 3600 if len(x) > 1 else 0
+}).reset_index()
+user_behavior.columns = ["SourceApps", "Unique_NIK", "Total_Request", "Active_Hours"]
+user_behavior["Request_per_Hour"] = user_behavior["Total_Request"] / user_behavior["Active_Hours"].replace(0, 1)
+user_behavior["NIK_Diversity"] = user_behavior["Unique_NIK"] / user_behavior["Total_Request"]
+
+# Filter apps dengan aktivitas tinggi
+high_activity = user_behavior[user_behavior["Total_Request"] >= 10].sort_values("Request_per_Hour", ascending=False)
+
+col_user1, col_user2 = st.columns([1, 1])
+
+with col_user1:
+    st.markdown("**Apps dengan Request Rate Tertinggi:**")
+    st.dataframe(high_activity.head(10), use_container_width=True)
+
+with col_user2:
+    fig_behavior = px.scatter(
+        high_activity.head(20),
+        x="Request_per_Hour",
+        y="NIK_Diversity",
+        size="Total_Request",
+        color="Request_per_Hour",
+        hover_data=["SourceApps", "Total_Request"],
+        title="Pola Perilaku User: Request Rate vs Diversity",
+        labels={"Request_per_Hour": "Request per Jam", "NIK_Diversity": "Keberagaman NIK"},
+        color_continuous_scale="Viridis"
+    )
+    st.plotly_chart(fig_behavior, use_container_width=True)
+
+# INSIGHT: Identifikasi suspicious behavior
+st.markdown("**🔍 Identifikasi Perilaku Mencurigakan:**")
+suspicious_behavior = high_activity[
+    (high_activity["Request_per_Hour"] > high_activity["Request_per_Hour"].quantile(0.9)) &
+    (high_activity["NIK_Diversity"] < 0.3)  # Rendahnya diversity NIK
+]
+
+if len(suspicious_behavior) > 0:
+    st.error(f"⚠️ **{len(suspicious_behavior)} SourceApps** menunjukkan pola mencurigakan (high rate + low diversity)")
+    st.dataframe(suspicious_behavior, use_container_width=True)
+else:
+    st.success("✅ Tidak ada pola perilaku mencurigakan")
+
+# ======================
+# INSIGHT BARU: GEOGRAPHIC ANALYSIS
+# ======================
+st.markdown("### 6️⃣ Analisis Geografis")
+
+# Analisis per wilayah
+geo_cols = ["Provinsi", "Kabupaten"]
+for geo in geo_cols:
+    if geo in df_f.columns:
+        geo_analysis = df_f[df_f[geo] != "-"].groupby(geo).agg({
+            "Nik": "nunique",
+            "Id": "count"
+        }).reset_index()
+        geo_analysis.columns = [geo, "Unique_NIK", "Total_Request"]
+        geo_analysis["Duplicate_Rate"] = (geo_analysis["Total_Request"] - geo_analysis["Unique_NIK"]) / geo_analysis["Total_Request"]
+        geo_analysis = geo_analysis.sort_values("Total_Request", ascending=False).head(15)
+        
+        col_geo1, col_geo2 = st.columns([1, 1])
+        
+        with col_geo1:
+            st.markdown(f"**Top 15 {geo} - Volume Request:**")
+            fig_geo_vol = px.bar(
+                geo_analysis,
+                x=geo,
+                y="Total_Request",
+                title=f"Top {geo} berdasarkan Volume",
+                color="Total_Request",
+                color_continuous_scale="Blues"
+            )
+            st.plotly_chart(fig_geo_vol, use_container_width=True)
+        
+        with col_geo2:
+            st.markdown(f"**Top 15 {geo} - Duplicate Rate:**")
+            fig_geo_dup = px.bar(
+                geo_analysis,
+                x=geo,
+                y="Duplicate_Rate",
+                title=f"Duplicate Rate per {geo}",
+                color="Duplicate_Rate",
+                color_continuous_scale="Reds"
+            )
+            st.plotly_chart(fig_geo_dup, use_container_width=True)
+
+# ======================
+# INSIGHT BARU: TIME SERIES COHORT
+# ======================
+st.markdown("### 7️⃣ Analisis Kohort Temporal")
+
+df_f["Date"] = df_f["CreatedDate"].dt.date
+df_f["Week"] = df_f["CreatedDate"].dt.isocalendar().week
+
+# Weekly cohort analysis
+weekly_cohort = df_f.groupby("Week").agg({
+    "Nik": "nunique",
+    "Id": "count"
+}).reset_index()
+weekly_cohort.columns = ["Minggu", "Unique_NIK", "Total_Request"]
+weekly_cohort["Growth_Rate"] = weekly_cohort["Unique_NIK"].pct_change() * 100
+
+col_cohort1, col_cohort2 = st.columns([1, 1])
+
+with col_cohort1:
+    fig_cohort_vol = go.Figure()
+    fig_cohort_vol.add_trace(go.Scatter(
+        x=weekly_cohort["Minggu"],
+        y=weekly_cohort["Unique_NIK"],
+        name="Unique NIK",
+        mode="lines+markers",
+        line=dict(color="blue", width=2)
+    ))
+    fig_cohort_vol.add_trace(go.Scatter(
+        x=weekly_cohort["Minggu"],
+        y=weekly_cohort["Total_Request"],
+        name="Total Request",
+        mode="lines+markers",
+        line=dict(color="red", width=2)
+    ))
+    fig_cohort_vol.update_layout(title="Tren Weekly: NIK vs Request")
+    st.plotly_chart(fig_cohort_vol, use_container_width=True)
+
+with col_cohort2:
+    fig_growth = px.bar(
+        weekly_cohort,
+        x="Minggu",
+        y="Growth_Rate",
+        title="Growth Rate Mingguan (%)",
+        color="Growth_Rate",
+        color_continuous_scale="RdYlGn"
+    )
+    st.plotly_chart(fig_growth, use_container_width=True)
 
 # ======================
 # TAMBAHAN: ACTIONABLE INSIGHTS
 # ======================
 st.markdown("---")
-st.subheader(" Actionable Insights & Recommendations")
+st.subheader("💡 Actionable Insights & Recommendations")
 
 insights_col1, insights_col2 = st.columns(2)
 
 with insights_col1:
-    st.markdown("###  Issues Detected")
+    st.markdown("### ⚠️ Issues Detected")
     
     # Fraud risk
     if high_risk_nik > 0:
-        st.error(f" **{high_risk_nik} NIK** dengan hit >5x → Investigate for potential fraud")
+        st.error(f"🚨 **{high_risk_nik} NIK** dengan hit >5x → Investigate for potential fraud")
     
     # Same app pattern
     if len(same_app_suspicious) > 0:
-        st.error(f" **{len(same_app_suspicious)}** suspicious SourceApps patterns → Possible bot activity")
+        st.error(f"🤖 **{len(same_app_suspicious)}** suspicious SourceApps patterns → Possible bot activity")
     
-    # Status flip
-    if len(flip_results) > 0:
-        st.error(f" **{len(flip_results)}** status flips detected → Data integrity issue")
+    # Status degradation
+    if len(degradation_results) > 0:
+        st.error(f"🔄 **{len(degradation_results)}** status degradations detected → Data integrity issue")
     
     # Rapid fire
     if len(rapid_fire) > 0:
-        st.error(f" **{len(rapid_fire)}** rapid fire requests → Bot detection")
+        st.error(f"⚡ **{len(rapid_fire)}** rapid fire requests → Bot detection")
     
     # Low efficiency source
     worst_source = source_perf.loc[source_perf["Cost_Efficiency"].idxmin()]
     if worst_source["Cost_Efficiency"] < 0.8:
-        st.warning(f" **{worst_source['SourceResult']}** efficiency hanya {worst_source['Cost_Efficiency']:.1%} → Optimize caching")
+        st.warning(f"💰 **{worst_source['SourceResult']}** efficiency hanya {worst_source['Cost_Efficiency']:.1%} → Optimize caching")
     
     # Field accuracy
     worst_field = field_df.iloc[0]
     if worst_field["Accuracy"] < 80:
-        st.warning(f" **{worst_field['Field']}** accuracy {worst_field['Accuracy']:.1f}% → Check data quality")
+        st.warning(f"📋 **{worst_field['Field']}** accuracy {worst_field['Accuracy']:.1f}% → Check data quality")
 
 with insights_col2:
-    st.markdown("###  Recommendations")
+    st.markdown("### ✅ Recommendations")
     
-    st.success(f" Peak hour: **{int(peak_hour['Hour'])}:00** → Scale infrastructure during this time")
+    st.success(f"⏰ Peak hour: **{int(peak_hour['Hour'])}:00** → Scale infrastructure during this time")
     
     best_source = source_perf.loc[source_perf["Cost_Efficiency"].idxmax()]
-    st.success(f" **{best_source['SourceResult']}** has best efficiency ({best_source['Cost_Efficiency']:.1%}) → Use as primary source")
+    st.success(f"🎯 **{best_source['SourceResult']}** has best efficiency ({best_source['Cost_Efficiency']:.1%}) → Use as primary source")
     
     if duplicate_rate > 0.3:
-        st.info(f" {duplicate_rate:.1%} duplicate rate → Implement better caching strategy")
+        st.info(f"♻️ {duplicate_rate:.1%} duplicate rate → Implement better caching strategy")
     
     if len(rapid_fire) > 0:
-        st.info(" Implement rate limiting & CAPTCHA for suspicious SourceApps")
+        st.info("🛡️ Implement rate limiting & CAPTCHA for suspicious SourceApps")
     
-    if len(flip_results) > 0:
-        st.info(" Audit data source reliability & implement version control")
+    if len(degradation_results) > 0:
+        st.info("🔍 Audit data source reliability & implement version control")
 
 # ======================
 # SIDEBAR - NIK DRILL DOWN
@@ -829,7 +1003,7 @@ if selected_nik != "":
         use_container_width=True
     )
 else:
-    st.info(" Pilih NIK dari dropdown untuk melihat detail")
+    st.info("👆 Pilih NIK dari dropdown untuk melihat detail")
 
 # ======================
 # RAW DATA
