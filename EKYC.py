@@ -647,7 +647,7 @@ else:
     st.success("✅ Tidak ada degradasi status - Semua verifikasi konsisten")
 
 # 3. RAPID FIRE PATTERN (Multiple hits dalam waktu singkat)
-st.markdown("### 3️⃣ Pola Rapid Fire (Deteksi Bot)")
+st.markdown("### 3️⃣ Rapid Fire Pattern (Bot Detection)")
 
 df_f_sorted = df_f.sort_values(["Nik", "CreatedDate"])
 df_f_sorted["Time_Diff"] = df_f_sorted.groupby("Nik")["CreatedDate"].diff().dt.total_seconds()
@@ -656,14 +656,14 @@ df_f_sorted["Time_Diff"] = df_f_sorted.groupby("Nik")["CreatedDate"].diff().dt.t
 rapid_fire = df_f_sorted[df_f_sorted["Time_Diff"] < 5].copy()
 
 if len(rapid_fire) > 0:
-    st.error(f"⚠️ Ditemukan **{len(rapid_fire)}** permintaan dengan interval <5 detik (kemungkinan bot)")
+    st.error(f"⚠️ Ditemukan **{len(rapid_fire)}** request dengan interval <5 detik (possible bot)")
     
     rapid_summary = rapid_fire.groupby("Nik").agg({
         "Id": "count",
         "Time_Diff": "mean",
         "SourceApps": lambda x: x.iloc[0]
     }).reset_index()
-    rapid_summary.columns = ["NIK", "Rapid_Hits", "Rata_Interval_Detik", "SourceApps"]
+    rapid_summary.columns = ["NIK", "Rapid_Hits", "Avg_Interval_Sec", "SourceApps"]
     rapid_summary = rapid_summary.sort_values("Rapid_Hits", ascending=False)
     
     col_rapid1, col_rapid2 = st.columns([1, 1])
@@ -677,20 +677,20 @@ if len(rapid_fire) > 0:
     with col_rapid2:
         fig_rapid = px.scatter(
             rapid_summary.head(20),
-            x="Rata_Interval_Detik",
+            x="Avg_Interval_Sec",
             y="Rapid_Hits",
             size="Rapid_Hits",
             color="Rapid_Hits",
             hover_data=["NIK", "SourceApps"],
-            title="Analisis Pola Rapid Fire",
+            title="Rapid Fire Pattern Analysis",
             color_continuous_scale="Reds"
         )
         st.plotly_chart(fig_rapid, use_container_width=True)
 else:
-    st.success("✅ Tidak ada pola rapid fire")
+    st.success("✅ Tidak ada rapid fire pattern")
 
 # 4. CROSS-SOURCE INCONSISTENCY
-st.markdown("### 4️⃣ Inkonsistensi Data Antar Sumber")
+st.markdown("### 4️⃣ Cross-Source Data Inconsistency")
 
 cross_inconsistency = []
 
@@ -705,18 +705,18 @@ for nik in df_f["Nik"].unique():
                 cross_inconsistency.append({
                     "NIK": nik,
                     "Field": col,
-                    "Sumber": ", ".join(statuses_by_source.index.tolist()),
-                    "Nilai": ", ".join(statuses_by_source.values.tolist()),
-                    "Total_Hit": len(df_nik_cross)
+                    "Sources": ", ".join(statuses_by_source.index.tolist()),
+                    "Values": ", ".join(statuses_by_source.values.tolist()),
+                    "Hit_Count": len(df_nik_cross)
                 })
 
 if len(cross_inconsistency) > 0:
     df_cross = pd.DataFrame(cross_inconsistency)
     
-    st.warning(f"⚠️ Ditemukan **{len(df_cross)}** kasus inkonsistensi antar sumber")
+    st.warning(f"⚠️ Ditemukan **{len(df_cross)}** kasus inconsistency antar source")
     
-    cross_summary = df_cross.groupby("Field").size().reset_index(name="Jumlah_Inkonsistensi")
-    cross_summary = cross_summary.sort_values("Jumlah_Inkonsistensi", ascending=False)
+    cross_summary = df_cross.groupby("Field").size().reset_index(name="Inconsistency_Count")
+    cross_summary = cross_summary.sort_values("Inconsistency_Count", ascending=False)
     
     col_cross1, col_cross2 = st.columns([1, 2])
     
@@ -727,162 +727,20 @@ if len(cross_inconsistency) > 0:
         fig_cross = px.bar(
             cross_summary,
             x="Field",
-            y="Jumlah_Inkonsistensi",
-            title="Inkonsistensi Antar Sumber per Field",
-            color="Jumlah_Inkonsistensi",
+            y="Inconsistency_Count",
+            title="Cross-Source Inconsistency by Field",
+            color="Inconsistency_Count",
             color_continuous_scale="Oranges"
         )
         st.plotly_chart(fig_cross, use_container_width=True)
     
-    st.markdown("**Detail Kasus Inkonsistensi (Top 20):**")
+    st.markdown("**Detail Inconsistency Cases (Top 20):**")
     st.dataframe(
         df_cross.head(20),
         use_container_width=True
     )
 else:
-    st.success("✅ Data konsisten antar sumber")
-
-# ======================
-# INSIGHT BARU: USER BEHAVIOR ANALYSIS
-# ======================
-st.markdown("### 5️⃣ Analisis Pola Perilaku Pengguna")
-
-# Analisis waktu response user
-user_behavior = df_f.groupby("SourceApps").agg({
-    "Nik": "nunique",
-    "Id": "count",
-    "CreatedDate": lambda x: (x.max() - x.min()).total_seconds() / 3600 if len(x) > 1 else 0
-}).reset_index()
-user_behavior.columns = ["SourceApps", "Unique_NIK", "Total_Request", "Active_Hours"]
-user_behavior["Request_per_Hour"] = user_behavior["Total_Request"] / user_behavior["Active_Hours"].replace(0, 1)
-user_behavior["NIK_Diversity"] = user_behavior["Unique_NIK"] / user_behavior["Total_Request"]
-
-# Filter apps dengan aktivitas tinggi
-high_activity = user_behavior[user_behavior["Total_Request"] >= 10].sort_values("Request_per_Hour", ascending=False)
-
-col_user1, col_user2 = st.columns([1, 1])
-
-with col_user1:
-    st.markdown("**Apps dengan Request Rate Tertinggi:**")
-    st.dataframe(high_activity.head(10), use_container_width=True)
-
-with col_user2:
-    fig_behavior = px.scatter(
-        high_activity.head(20),
-        x="Request_per_Hour",
-        y="NIK_Diversity",
-        size="Total_Request",
-        color="Request_per_Hour",
-        hover_data=["SourceApps", "Total_Request"],
-        title="Pola Perilaku User: Request Rate vs Diversity",
-        labels={"Request_per_Hour": "Request per Jam", "NIK_Diversity": "Keberagaman NIK"},
-        color_continuous_scale="Viridis"
-    )
-    st.plotly_chart(fig_behavior, use_container_width=True)
-
-# INSIGHT: Identifikasi suspicious behavior
-st.markdown("**🔍 Identifikasi Perilaku Mencurigakan:**")
-suspicious_behavior = high_activity[
-    (high_activity["Request_per_Hour"] > high_activity["Request_per_Hour"].quantile(0.9)) &
-    (high_activity["NIK_Diversity"] < 0.3)  # Rendahnya diversity NIK
-]
-
-if len(suspicious_behavior) > 0:
-    st.error(f"⚠️ **{len(suspicious_behavior)} SourceApps** menunjukkan pola mencurigakan (high rate + low diversity)")
-    st.dataframe(suspicious_behavior, use_container_width=True)
-else:
-    st.success("✅ Tidak ada pola perilaku mencurigakan")
-
-# ======================
-# INSIGHT BARU: GEOGRAPHIC ANALYSIS
-# ======================
-st.markdown("### 6️⃣ Analisis Geografis")
-
-# Analisis per wilayah
-geo_cols = ["Provinsi", "Kabupaten"]
-for geo in geo_cols:
-    if geo in df_f.columns:
-        geo_analysis = df_f[df_f[geo] != "-"].groupby(geo).agg({
-            "Nik": "nunique",
-            "Id": "count"
-        }).reset_index()
-        geo_analysis.columns = [geo, "Unique_NIK", "Total_Request"]
-        geo_analysis["Duplicate_Rate"] = (geo_analysis["Total_Request"] - geo_analysis["Unique_NIK"]) / geo_analysis["Total_Request"]
-        geo_analysis = geo_analysis.sort_values("Total_Request", ascending=False).head(15)
-        
-        col_geo1, col_geo2 = st.columns([1, 1])
-        
-        with col_geo1:
-            st.markdown(f"**Top 15 {geo} - Volume Request:**")
-            fig_geo_vol = px.bar(
-                geo_analysis,
-                x=geo,
-                y="Total_Request",
-                title=f"Top {geo} berdasarkan Volume",
-                color="Total_Request",
-                color_continuous_scale="Blues"
-            )
-            st.plotly_chart(fig_geo_vol, use_container_width=True)
-        
-        with col_geo2:
-            st.markdown(f"**Top 15 {geo} - Duplicate Rate:**")
-            fig_geo_dup = px.bar(
-                geo_analysis,
-                x=geo,
-                y="Duplicate_Rate",
-                title=f"Duplicate Rate per {geo}",
-                color="Duplicate_Rate",
-                color_continuous_scale="Reds"
-            )
-            st.plotly_chart(fig_geo_dup, use_container_width=True)
-
-# ======================
-# INSIGHT BARU: TIME SERIES COHORT
-# ======================
-st.markdown("### 7️⃣ Analisis Kohort Temporal")
-
-df_f["Date"] = df_f["CreatedDate"].dt.date
-df_f["Week"] = df_f["CreatedDate"].dt.isocalendar().week
-
-# Weekly cohort analysis
-weekly_cohort = df_f.groupby("Week").agg({
-    "Nik": "nunique",
-    "Id": "count"
-}).reset_index()
-weekly_cohort.columns = ["Minggu", "Unique_NIK", "Total_Request"]
-weekly_cohort["Growth_Rate"] = weekly_cohort["Unique_NIK"].pct_change() * 100
-
-col_cohort1, col_cohort2 = st.columns([1, 1])
-
-with col_cohort1:
-    fig_cohort_vol = go.Figure()
-    fig_cohort_vol.add_trace(go.Scatter(
-        x=weekly_cohort["Minggu"],
-        y=weekly_cohort["Unique_NIK"],
-        name="Unique NIK",
-        mode="lines+markers",
-        line=dict(color="blue", width=2)
-    ))
-    fig_cohort_vol.add_trace(go.Scatter(
-        x=weekly_cohort["Minggu"],
-        y=weekly_cohort["Total_Request"],
-        name="Total Request",
-        mode="lines+markers",
-        line=dict(color="red", width=2)
-    ))
-    fig_cohort_vol.update_layout(title="Tren Weekly: NIK vs Request")
-    st.plotly_chart(fig_cohort_vol, use_container_width=True)
-
-with col_cohort2:
-    fig_growth = px.bar(
-        weekly_cohort,
-        x="Minggu",
-        y="Growth_Rate",
-        title="Growth Rate Mingguan (%)",
-        color="Growth_Rate",
-        color_continuous_scale="RdYlGn"
-    )
-    st.plotly_chart(fig_growth, use_container_width=True)
+    st.success("✅ Data konsisten antar source")
 
 # ======================
 # TAMBAHAN: ACTIONABLE INSIGHTS
