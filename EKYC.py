@@ -477,7 +477,7 @@ st.markdown("---")
 st.subheader(" Fraud Detection & Anomaly Analysis")
 
 # 1. SAME APP ID ANOMALY
-st.markdown("### 1️ Same SourceApps Pattern (Potential Bot/Script)")
+st.markdown("###  Same SourceApps Pattern (Potential Bot/Script)")
 
 same_app = df_f.groupby(["SourceApps", "Nik"]).size().reset_index(name="Hit_Count")
 same_app_suspicious = same_app[same_app["Hit_Count"] > 3].sort_values("Hit_Count", ascending=False)
@@ -520,69 +520,99 @@ if len(same_app_suspicious) > 0:
 else:
     st.success(" Tidak ada pola suspicious pada SourceApps")
 
-# 2. STATUS FLIP ANOMALY (Sesuai → Tidak Sesuai)
-st.markdown("### 2️ Status Flip Anomaly (Data Inconsistency)")
+# 2. STATUS INCONSISTENCY (Multiple status dalam 1 NIK)
+st.markdown("###  Status Inconsistency (Data Instability)")
 
-# Untuk setiap NIK, cek apakah ada perubahan status
-flip_results = []
+# Cari NIK dengan status yang berubah-ubah (tidak konsisten)
+inconsistency_results = []
 
 for nik in df_f["Nik"].unique():
     df_nik_check = df_f[df_f["Nik"] == nik].sort_values("CreatedDate")
     
     if len(df_nik_check) > 1:
         for col in status_cols:
-            statuses = df_nik_check[col].unique()
+            unique_statuses = df_nik_check[col].unique()
             
-            # Jika ada "Sesuai" dan "Tidak Sesuai" dalam satu NIK
-            if "Sesuai" in statuses and "Tidak Sesuai" in statuses:
-                first_status = df_nik_check.iloc[0][col]
-                last_status = df_nik_check.iloc[-1][col]
+            # Jika ada lebih dari 1 status untuk field yang sama
+            if len(unique_statuses) > 1 and "-" not in unique_statuses:
+                status_sequence = df_nik_check[col].tolist()
                 
-                # Jika ada flip dari Sesuai ke Tidak Sesuai
-                if first_status == "Sesuai" and last_status == "Tidak Sesuai":
-                    flip_results.append({
-                        "NIK": nik,
-                        "Field": col,
-                        "First_Status": first_status,
-                        "Last_Status": last_status,
-                        "First_Date": df_nik_check.iloc[0]["CreatedDate"],
-                        "Last_Date": df_nik_check.iloc[-1]["CreatedDate"],
-                        "Hit_Count": len(df_nik_check),
-                        "SourceApps": df_nik_check.iloc[0]["SourceApps"]
-                    })
+                inconsistency_results.append({
+                    "NIK": nik,
+                    "Field": col,
+                    "Status_Sequence": " → ".join(status_sequence[:5]),  # Max 5 untuk display
+                    "Unique_Statuses": len(unique_statuses),
+                    "Total_Hits": len(df_nik_check),
+                    "First_Date": df_nik_check.iloc[0]["CreatedDate"],
+                    "Last_Date": df_nik_check.iloc[-1]["CreatedDate"],
+                    "Sources_Used": ", ".join(df_nik_check["SourceResult"].unique()),
+                    "SourceApps": df_nik_check.iloc[0]["SourceApps"]
+                })
 
-if len(flip_results) > 0:
-    df_flip = pd.DataFrame(flip_results)
+if len(inconsistency_results) > 0:
+    df_inconsist = pd.DataFrame(inconsistency_results)
     
-    st.error(f" Ditemukan **{len(df_flip)}** kasus status flip (Sesuai → Tidak Sesuai)")
+    st.warning(f" Ditemukan **{len(df_inconsist)}** kasus status inconsistency")
     
     # Summary by field
-    flip_summary = df_flip.groupby("Field").size().reset_index(name="Flip_Count")
-    flip_summary = flip_summary.sort_values("Flip_Count", ascending=False)
+    inconsist_summary = df_inconsist.groupby("Field").agg({
+        "NIK": "count",
+        "Total_Hits": "sum"
+    }).reset_index()
+    inconsist_summary.columns = ["Field", "Affected_NIK", "Total_Inconsistent_Hits"]
+    inconsist_summary = inconsist_summary.sort_values("Affected_NIK", ascending=False)
     
-    col_flip1, col_flip2 = st.columns([1, 2])
+    col_inconsist1, col_inconsist2 = st.columns([1, 2])
     
-    with col_flip1:
-        st.dataframe(flip_summary, use_container_width=True)
+    with col_inconsist1:
+        st.dataframe(inconsist_summary, use_container_width=True)
+        
+        # Metric summary
+        st.metric("Total Affected NIK", len(df_inconsist["NIK"].unique()))
+        st.metric("Most Unstable Field", inconsist_summary.iloc[0]["Field"])
     
-    with col_flip2:
-        fig_flip = px.bar(
-            flip_summary,
+    with col_inconsist2:
+        fig_inconsist = px.bar(
+            inconsist_summary,
             x="Field",
-            y="Flip_Count",
-            title="Status Flip by Field",
-            color="Flip_Count",
-            color_continuous_scale="Reds"
+            y="Affected_NIK",
+            title="Status Inconsistency by Field",
+            color="Affected_NIK",
+            color_continuous_scale="Oranges",
+            text="Affected_NIK"
         )
-        st.plotly_chart(fig_flip, use_container_width=True)
+        fig_inconsist.update_traces(textposition='outside')
+        st.plotly_chart(fig_inconsist, use_container_width=True)
     
-    st.markdown("**Detail Status Flip Cases (Top 20):**")
+    st.markdown("**Detail Inconsistency Cases (Top 20):**")
     st.dataframe(
-        df_flip.sort_values("Hit_Count", ascending=False).head(20),
+        df_inconsist.sort_values("Total_Hits", ascending=False).head(20),
         use_container_width=True
     )
+    
+    # Tambahan: Cek pattern Sesuai → Tidak Sesuai specifically
+    sesuai_to_tidak = []
+    for nik in df_f["Nik"].unique():
+        df_nik_check = df_f[df_f["Nik"] == nik].sort_values("CreatedDate")
+        if len(df_nik_check) > 1:
+            for col in status_cols:
+                statuses = df_nik_check[col].tolist()
+                # Cek ada pattern Sesuai diikuti Tidak Sesuai
+                for i in range(len(statuses)-1):
+                    if statuses[i] == "Sesuai" and statuses[i+1] == "Tidak Sesuai":
+                        sesuai_to_tidak.append({
+                            "NIK": nik,
+                            "Field": col,
+                            "When": df_nik_check.iloc[i+1]["CreatedDate"]
+                        })
+                        break
+    
+    if len(sesuai_to_tidak) > 0:
+        st.error(f" **CRITICAL**: {len(sesuai_to_tidak)} cases of 'Sesuai' → 'Tidak Sesuai' flip detected!")
+        st.dataframe(pd.DataFrame(sesuai_to_tidak).head(10), use_container_width=True)
+    
 else:
-    st.success(" Tidak ada status flip anomaly")
+    st.success(" Tidak ada status inconsistency - Data stabil")
 
 # 3. RAPID FIRE PATTERN (Multiple hits dalam waktu singkat)
 st.markdown("### 3️ Rapid Fire Pattern (Bot Detection)")
@@ -628,7 +658,7 @@ else:
     st.success(" Tidak ada rapid fire pattern")
 
 # 4. CROSS-SOURCE INCONSISTENCY
-st.markdown("### 4️⃣ Cross-Source Data Inconsistency")
+st.markdown("###  Cross-Source Data Inconsistency")
 
 cross_inconsistency = []
 
@@ -737,7 +767,7 @@ with insights_col2:
 # ======================
 # SIDEBAR - NIK DRILL DOWN
 # ======================
-st.sidebar.subheader(" NIK Drill Down")
+st.sidebar.subheader("🔍 NIK Drill Down")
 
 nik_list = sorted(df["Nik"].dropna().astype(str).unique())
 
