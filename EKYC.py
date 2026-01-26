@@ -471,6 +471,216 @@ fig_day = px.bar(
 st.plotly_chart(fig_day, use_container_width=True)
 
 # ======================
+# FRAUD DETECTION ANALYSIS
+# ======================
+st.markdown("---")
+st.subheader(" Fraud Detection & Anomaly Analysis")
+
+# 1. SAME APP ID ANOMALY
+st.markdown("### 1️ Same SourceApps Pattern (Potential Bot/Script)")
+
+same_app = df_f.groupby(["SourceApps", "Nik"]).size().reset_index(name="Hit_Count")
+same_app_suspicious = same_app[same_app["Hit_Count"] > 3].sort_values("Hit_Count", ascending=False)
+
+if len(same_app_suspicious) > 0:
+    st.error(f" Ditemukan **{len(same_app_suspicious)}** kombinasi SourceApps-NIK dengan hit >3x")
+    
+    # Group by app
+    app_summary = same_app_suspicious.groupby("SourceApps").agg({
+        "Nik": "count",
+        "Hit_Count": "sum"
+    }).reset_index()
+    app_summary.columns = ["SourceApps", "Unique_NIK", "Total_Hits"]
+    app_summary = app_summary.sort_values("Total_Hits", ascending=False)
+    
+    col_app1, col_app2 = st.columns([1, 2])
+    
+    with col_app1:
+        st.dataframe(
+            app_summary.head(10),
+            use_container_width=True
+        )
+    
+    with col_app2:
+        fig_app = px.bar(
+            app_summary.head(10),
+            x="SourceApps",
+            y="Total_Hits",
+            color="Unique_NIK",
+            title="Top Suspicious SourceApps",
+            text="Total_Hits"
+        )
+        st.plotly_chart(fig_app, use_container_width=True)
+    
+    st.markdown("**Detail Top Suspicious Patterns:**")
+    st.dataframe(
+        same_app_suspicious.head(20),
+        use_container_width=True
+    )
+else:
+    st.success(" Tidak ada pola suspicious pada SourceApps")
+
+# 2. STATUS FLIP ANOMALY (Sesuai → Tidak Sesuai)
+st.markdown("### 2️ Status Flip Anomaly (Data Inconsistency)")
+
+# Untuk setiap NIK, cek apakah ada perubahan status
+flip_results = []
+
+for nik in df_f["Nik"].unique():
+    df_nik_check = df_f[df_f["Nik"] == nik].sort_values("CreatedDate")
+    
+    if len(df_nik_check) > 1:
+        for col in status_cols:
+            statuses = df_nik_check[col].unique()
+            
+            # Jika ada "Sesuai" dan "Tidak Sesuai" dalam satu NIK
+            if "Sesuai" in statuses and "Tidak Sesuai" in statuses:
+                first_status = df_nik_check.iloc[0][col]
+                last_status = df_nik_check.iloc[-1][col]
+                
+                # Jika ada flip dari Sesuai ke Tidak Sesuai
+                if first_status == "Sesuai" and last_status == "Tidak Sesuai":
+                    flip_results.append({
+                        "NIK": nik,
+                        "Field": col,
+                        "First_Status": first_status,
+                        "Last_Status": last_status,
+                        "First_Date": df_nik_check.iloc[0]["CreatedDate"],
+                        "Last_Date": df_nik_check.iloc[-1]["CreatedDate"],
+                        "Hit_Count": len(df_nik_check),
+                        "SourceApps": df_nik_check.iloc[0]["SourceApps"]
+                    })
+
+if len(flip_results) > 0:
+    df_flip = pd.DataFrame(flip_results)
+    
+    st.error(f" Ditemukan **{len(df_flip)}** kasus status flip (Sesuai → Tidak Sesuai)")
+    
+    # Summary by field
+    flip_summary = df_flip.groupby("Field").size().reset_index(name="Flip_Count")
+    flip_summary = flip_summary.sort_values("Flip_Count", ascending=False)
+    
+    col_flip1, col_flip2 = st.columns([1, 2])
+    
+    with col_flip1:
+        st.dataframe(flip_summary, use_container_width=True)
+    
+    with col_flip2:
+        fig_flip = px.bar(
+            flip_summary,
+            x="Field",
+            y="Flip_Count",
+            title="Status Flip by Field",
+            color="Flip_Count",
+            color_continuous_scale="Reds"
+        )
+        st.plotly_chart(fig_flip, use_container_width=True)
+    
+    st.markdown("**Detail Status Flip Cases (Top 20):**")
+    st.dataframe(
+        df_flip.sort_values("Hit_Count", ascending=False).head(20),
+        use_container_width=True
+    )
+else:
+    st.success(" Tidak ada status flip anomaly")
+
+# 3. RAPID FIRE PATTERN (Multiple hits dalam waktu singkat)
+st.markdown("### 3️ Rapid Fire Pattern (Bot Detection)")
+
+df_f_sorted = df_f.sort_values(["Nik", "CreatedDate"])
+df_f_sorted["Time_Diff"] = df_f_sorted.groupby("Nik")["CreatedDate"].diff().dt.total_seconds()
+
+# Hit dalam waktu < 5 detik
+rapid_fire = df_f_sorted[df_f_sorted["Time_Diff"] < 5].copy()
+
+if len(rapid_fire) > 0:
+    st.error(f" Ditemukan **{len(rapid_fire)}** request dengan interval <5 detik (possible bot)")
+    
+    rapid_summary = rapid_fire.groupby("Nik").agg({
+        "Id": "count",
+        "Time_Diff": "mean",
+        "SourceApps": lambda x: x.iloc[0]
+    }).reset_index()
+    rapid_summary.columns = ["NIK", "Rapid_Hits", "Avg_Interval_Sec", "SourceApps"]
+    rapid_summary = rapid_summary.sort_values("Rapid_Hits", ascending=False)
+    
+    col_rapid1, col_rapid2 = st.columns([1, 1])
+    
+    with col_rapid1:
+        st.dataframe(
+            rapid_summary.head(15),
+            use_container_width=True
+        )
+    
+    with col_rapid2:
+        fig_rapid = px.scatter(
+            rapid_summary.head(20),
+            x="Avg_Interval_Sec",
+            y="Rapid_Hits",
+            size="Rapid_Hits",
+            color="Rapid_Hits",
+            hover_data=["NIK", "SourceApps"],
+            title="Rapid Fire Pattern Analysis",
+            color_continuous_scale="Reds"
+        )
+        st.plotly_chart(fig_rapid, use_container_width=True)
+else:
+    st.success(" Tidak ada rapid fire pattern")
+
+# 4. CROSS-SOURCE INCONSISTENCY
+st.markdown("### 4️⃣ Cross-Source Data Inconsistency")
+
+cross_inconsistency = []
+
+for nik in df_f["Nik"].unique():
+    df_nik_cross = df_f[df_f["Nik"] == nik]
+    
+    if df_nik_cross["SourceResult"].nunique() > 1:
+        for col in status_cols:
+            statuses_by_source = df_nik_cross.groupby("SourceResult")[col].apply(lambda x: x.mode()[0] if len(x.mode()) > 0 else x.iloc[0])
+            
+            if statuses_by_source.nunique() > 1:
+                cross_inconsistency.append({
+                    "NIK": nik,
+                    "Field": col,
+                    "Sources": ", ".join(statuses_by_source.index.tolist()),
+                    "Values": ", ".join(statuses_by_source.values.tolist()),
+                    "Hit_Count": len(df_nik_cross)
+                })
+
+if len(cross_inconsistency) > 0:
+    df_cross = pd.DataFrame(cross_inconsistency)
+    
+    st.warning(f" Ditemukan **{len(df_cross)}** kasus inconsistency antar source")
+    
+    cross_summary = df_cross.groupby("Field").size().reset_index(name="Inconsistency_Count")
+    cross_summary = cross_summary.sort_values("Inconsistency_Count", ascending=False)
+    
+    col_cross1, col_cross2 = st.columns([1, 2])
+    
+    with col_cross1:
+        st.dataframe(cross_summary, use_container_width=True)
+    
+    with col_cross2:
+        fig_cross = px.bar(
+            cross_summary,
+            x="Field",
+            y="Inconsistency_Count",
+            title="Cross-Source Inconsistency by Field",
+            color="Inconsistency_Count",
+            color_continuous_scale="Oranges"
+        )
+        st.plotly_chart(fig_cross, use_container_width=True)
+    
+    st.markdown("**Detail Inconsistency Cases (Top 20):**")
+    st.dataframe(
+        df_cross.head(20),
+        use_container_width=True
+    )
+else:
+    st.success(" Data konsisten antar source")
+
+# ======================
 # TAMBAHAN: ACTIONABLE INSIGHTS
 # ======================
 st.markdown("---")
@@ -484,6 +694,18 @@ with insights_col1:
     # Fraud risk
     if high_risk_nik > 0:
         st.error(f" **{high_risk_nik} NIK** dengan hit >5x → Investigate for potential fraud")
+    
+    # Same app pattern
+    if len(same_app_suspicious) > 0:
+        st.error(f" **{len(same_app_suspicious)}** suspicious SourceApps patterns → Possible bot activity")
+    
+    # Status flip
+    if len(flip_results) > 0:
+        st.error(f" **{len(flip_results)}** status flips detected → Data integrity issue")
+    
+    # Rapid fire
+    if len(rapid_fire) > 0:
+        st.error(f" **{len(rapid_fire)}** rapid fire requests → Bot detection")
     
     # Low efficiency source
     worst_source = source_perf.loc[source_perf["Cost_Efficiency"].idxmin()]
@@ -505,11 +727,17 @@ with insights_col2:
     
     if duplicate_rate > 0.3:
         st.info(f" {duplicate_rate:.1%} duplicate rate → Implement better caching strategy")
+    
+    if len(rapid_fire) > 0:
+        st.info(" Implement rate limiting & CAPTCHA for suspicious SourceApps")
+    
+    if len(flip_results) > 0:
+        st.info(" Audit data source reliability & implement version control")
 
 # ======================
 # SIDEBAR - NIK DRILL DOWN
 # ======================
-st.sidebar.subheader("🔍 NIK Drill Down")
+st.sidebar.subheader(" NIK Drill Down")
 
 nik_list = sorted(df["Nik"].dropna().astype(str).unique())
 
