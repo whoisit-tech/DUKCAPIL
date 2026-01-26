@@ -4,42 +4,59 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 
-st.set_page_config(page_title="NIK Verification Analytics", layout="wide")
+st.set_page_config(
+    page_title="NIK Verification Dashboard",
+    layout="wide"
+)
+
+st.title("NIK Verification Monitoring Dashboard")
 
 # ======================
-# LOAD & CLEAN DATA
+# LOAD EXCEL FILE
 # ======================
 FILE_NAME = "LogDUKCAPIL_2025 (1).xlsx"
 
 if not Path(FILE_NAME).exists():
-    st.error(f"❌ File '{FILE_NAME}' tidak ditemukan")
+    st.error(f"❌ File '{FILE_NAME}' tidak ditemukan di folder app.py")
     st.stop()
 
 df = pd.read_excel(FILE_NAME)
+
+# ======================
+# BASIC CLEANING
+# ======================
 df.columns = df.columns.str.strip()
+
 df["CreatedDate"] = pd.to_datetime(df["CreatedDate"], errors="coerce")
 
-status_cols = ["NamaDenganGelar", "Nama", "JenisKelamin", "TempatLahir", "TglLahir",
-               "Provinsi", "Kabupaten", "Kecamatan", "Kelurahan"]
+status_cols = [
+    "NamaDenganGelar", "Nama", "JenisKelamin",
+    "TempatLahir", "TglLahir",
+    "Provinsi", "Kabupaten", "Kecamatan", "Kelurahan"
+]
 
 for c in status_cols:
     if c in df.columns:
         df[c] = df[c].fillna("-")
 
 # ======================
-# FILTERS
+# SIDEBAR FILTER
 # ======================
-st.sidebar.header(" Filter")
+st.sidebar.header("Filter")
 
 source_filter = st.sidebar.multiselect(
-    "Source Result",
+    "SourceResult",
     options=sorted(df["SourceResult"].dropna().unique()),
     default=sorted(df["SourceResult"].dropna().unique())
 )
 
 date_min = df["CreatedDate"].min().date()
 date_max = df["CreatedDate"].max().date()
-date_range = st.sidebar.date_input("Periode", [date_min, date_max])
+
+date_range = st.sidebar.date_input(
+    "Tanggal",
+    [date_min, date_max]
+)
 
 df_f = df[
     (df["SourceResult"].isin(source_filter)) &
@@ -47,21 +64,47 @@ df_f = df[
 ]
 
 # ======================
-# ANALYTICAL METRICS
+# KPI PER NIK
 # ======================
-st.title(" NIK Verification Analytics")
 
-# Hitung metrics
+# Hitung kemunculan per NIK
 nik_counts = df_f.groupby("Nik").size()
-total_nik = nik_counts.shape[0]
-total_requests = len(df_f)
-avg_hit_per_nik = total_requests / total_nik if total_nik > 0 else 0
 
-# Duplicate rate
+# Total NIK (per orang)
+total_nik = nik_counts.shape[0]
+
+# NIK hit 1 kali
+nik_hit_1 = (nik_counts == 1).sum()
+
+# NIK hit lebih dari 1 kali
+nik_hit_gt1 = (nik_counts > 1).sum()
+
+# Persentase (basis per NIK)
+pct_hit_1 = nik_hit_1 / total_nik if total_nik else 0
+pct_hit_gt1 = nik_hit_gt1 / total_nik if total_nik else 0
+
+
+# ======================
+# DISPLAY KPI
+# ======================
+k1, k2, k3, k4 = st.columns(4)
+
+k1.metric("Total NIK", f"{total_nik:,}")
+k2.metric("NIK Hit 1x", f"{nik_hit_1:,}", f"{pct_hit_1:.2%}")
+k3.metric("NIK Hit >1x", f"{nik_hit_gt1:,}", f"{pct_hit_gt1:.2%}")
+k4.metric("Total Request", f"{len(df_f):,}")
+
+# ======================
+# TAMBAHAN: ANALYTICAL METRICS
+# ======================
+st.markdown("---")
+st.subheader(" Analytical Insights")
+
+total_requests = len(df_f)
 duplicate_requests = total_requests - total_nik
 duplicate_rate = duplicate_requests / total_requests if total_requests > 0 else 0
 
-# Fraud risk (NIK hit >5x)
+# Fraud risk
 high_risk_nik = (nik_counts > 5).sum()
 risk_rate = high_risk_nik / total_nik if total_nik > 0 else 0
 
@@ -70,84 +113,104 @@ total_fields = len(df_f) * len(status_cols)
 sesuai_count = (df_f[status_cols] == "Sesuai").sum().sum()
 quality_score = sesuai_count / total_fields if total_fields > 0 else 0
 
-# Display KPI
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total NIK", f"{total_nik:,}", f"Req: {total_requests:,}")
-col2.metric("Duplicate Rate", f"{duplicate_rate:.1%}", f"{duplicate_requests:,} duplikat")
-col3.metric("Fraud Risk (>5x)", f"{risk_rate:.1%}", f"{high_risk_nik:,} NIK")
-col4.metric("Data Quality", f"{quality_score:.1%}", "avg field accuracy")
+ka1, ka2, ka3 = st.columns(3)
+ka1.metric("Duplicate Rate", f"{duplicate_rate:.1%}", f"{duplicate_requests:,} wasted requests")
+ka2.metric("Fraud Risk (>5x)", f"{risk_rate:.1%}", f"{high_risk_nik:,} suspicious NIK")
+ka3.metric("Data Quality", f"{quality_score:.1%}", "overall field accuracy")
 
 # ======================
-# ANOMALY DETECTION
 # ======================
-st.subheader(" Anomaly Detection")
+# SOURCE RESULT - STACKED BAR (NIK + TOTAL REQUEST)
+# ======================
+st.subheader("Source Result Distribution (NIK vs Request)")
 
-col_a, col_b = st.columns(2)
+# Hitung hit per NIK per SourceResult
+nik_source = (
+    df_f
+    .groupby(["SourceResult", "Nik"])
+    .size()
+    .reset_index(name="hit_count")
+)
 
-with col_a:
-    # Top repeat offenders
-    top_repeat = nik_counts.nlargest(10).reset_index()
-    top_repeat.columns = ["NIK", "Hit Count"]
-    
-    fig_repeat = px.bar(
-        top_repeat,
-        x="NIK",
-        y="Hit Count",
-        title="Top 10 Repeat NIK (Fraud Risk)",
-        color="Hit Count",
-        color_continuous_scale="Reds"
+nik_source["hit_type"] = nik_source["hit_count"].apply(
+    lambda x: "Hit 1x" if x == 1 else "Hit >1x"
+)
+
+# Agregasi NIK
+src_nik_stack = (
+    nik_source
+    .groupby(["SourceResult", "hit_type"])
+    .size()
+    .reset_index(name="nik_count")
+)
+
+# Total request per source
+src_request = (
+    df_f
+    .groupby("SourceResult")
+    .size()
+    .reset_index(name="total_request")
+)
+
+# Merge supaya bisa kasih label request
+src_chart = src_nik_stack.merge(
+    src_request,
+    on="SourceResult",
+    how="left"
+)
+
+# Plot
+fig_src = px.bar(
+    src_chart,
+    x="SourceResult",
+    y="nik_count",
+    color="hit_type",
+    text="nik_count",
+    title="NIK Distribution per Source Result (with Total Request)",
+    labels={
+        "nik_count": "Jumlah NIK",
+        "hit_type": "Kategori Hit"
+    }
+)
+
+# Tambahin total request di atas bar
+fig_src.update_traces(
+    textposition="inside"
+)
+
+fig_src.update_xaxes(categoryorder="total descending")
+
+# Tambah anotasi total request
+for i, row in src_request.iterrows():
+    fig_src.add_annotation(
+        x=row["SourceResult"],
+        y=src_nik_stack[src_nik_stack["SourceResult"] == row["SourceResult"]]["nik_count"].sum(),
+        text=f"Req: {row['total_request']:,}",
+        showarrow=False,
+        yshift=10
     )
-    st.plotly_chart(fig_repeat, use_container_width=True)
 
-with col_b:
-    # Hourly anomaly
-    df_f["Hour"] = df_f["CreatedDate"].dt.hour
-    hourly = df_f.groupby("Hour").size()
-    
-    mean_hourly = hourly.mean()
-    std_hourly = hourly.std()
-    
-    hourly_df = hourly.reset_index(name="Requests")
-    hourly_df["Anomaly"] = hourly_df["Requests"] > (mean_hourly + 2*std_hourly)
-    
-    fig_hourly = px.bar(
-        hourly_df,
-        x="Hour",
-        y="Requests",
-        title="Peak Hours (Red = Anomaly)",
-        color="Anomaly",
-        color_discrete_map={True: "red", False: "steelblue"}
-    )
-    st.plotly_chart(fig_hourly, use_container_width=True)
+st.plotly_chart(fig_src, use_container_width=True)
 
 # ======================
-# SOURCE PERFORMANCE
+# TAMBAHAN: SOURCE PERFORMANCE ANALYSIS
 # ======================
 st.subheader(" Source Performance Analysis")
 
-# Source efficiency
-source_stats = df_f.groupby("SourceResult").agg({
-    "Nik": "count",
-    "Id": "count"
-}).rename(columns={"Nik": "Requests", "Id": "Count"})
-
-# Quality per source
 source_quality = df_f.groupby("SourceResult")[status_cols].apply(
     lambda x: (x == "Sesuai").sum().sum() / (len(x) * len(status_cols))
 ).reset_index(name="Quality_Score")
 
-# Unique NIK per source
 source_unique = df_f.groupby("SourceResult")["Nik"].nunique().reset_index(name="Unique_NIK")
+source_total = df_f.groupby("SourceResult").size().reset_index(name="Total_Requests")
 
-# Merge all
-source_perf = source_stats.merge(source_quality, on="SourceResult").merge(source_unique, on="SourceResult")
-source_perf["Duplicate_Rate"] = (source_perf["Requests"] - source_perf["Unique_NIK"]) / source_perf["Requests"]
-source_perf["Cost_Efficiency"] = source_perf["Unique_NIK"] / source_perf["Requests"]  # unique/total = efisiensi
+source_perf = source_total.merge(source_unique, on="SourceResult").merge(source_quality, on="SourceResult")
+source_perf["Cost_Efficiency"] = source_perf["Unique_NIK"] / source_perf["Total_Requests"]
+source_perf["Duplicate_Rate"] = 1 - source_perf["Cost_Efficiency"]
 
-# Visualize
-fig_source = go.Figure()
+fig_perf = go.Figure()
 
-fig_source.add_trace(go.Bar(
+fig_perf.add_trace(go.Bar(
     name="Quality Score",
     x=source_perf["SourceResult"],
     y=source_perf["Quality_Score"],
@@ -155,25 +218,25 @@ fig_source.add_trace(go.Bar(
     marker_color="lightblue"
 ))
 
-fig_source.add_trace(go.Scatter(
+fig_perf.add_trace(go.Scatter(
     name="Cost Efficiency",
     x=source_perf["SourceResult"],
     y=source_perf["Cost_Efficiency"],
     yaxis="y2",
     marker_color="red",
-    mode="lines+markers"
+    mode="lines+markers",
+    line=dict(width=3)
 ))
 
-fig_source.update_layout(
-    title="Source Quality vs Cost Efficiency",
-    yaxis=dict(title="Quality Score"),
-    yaxis2=dict(title="Cost Efficiency", overlaying="y", side="right"),
-    hovermode="x"
+fig_perf.update_layout(
+    title="Quality vs Efficiency Trade-off by Source",
+    yaxis=dict(title="Quality Score", range=[0, 1]),
+    yaxis2=dict(title="Cost Efficiency", overlaying="y", side="right", range=[0, 1]),
+    hovermode="x unified"
 )
 
-st.plotly_chart(fig_source, use_container_width=True)
+st.plotly_chart(fig_perf, use_container_width=True)
 
-# Table
 st.dataframe(
     source_perf.style.format({
         "Quality_Score": "{:.1%}",
@@ -184,9 +247,32 @@ st.dataframe(
 )
 
 # ======================
-# FIELD ACCURACY HEATMAP
+# STATUS RECAP
 # ======================
-st.subheader(" Field Accuracy Matrix")
+st.subheader("Kesesuaian per Field")
+
+rekap_long = (
+    df_f[status_cols]
+    .melt(var_name="Field", value_name="Status")
+    .groupby(["Field", "Status"])
+    .size()
+    .reset_index(name="Count")
+)
+
+fig_status = px.bar(
+    rekap_long,
+    x="Field",
+    y="Count",
+    color="Status",
+    barmode="stack"
+)
+
+st.plotly_chart(fig_status, use_container_width=True)
+
+# ======================
+# TAMBAHAN: FIELD ACCURACY RANKING
+# ======================
+st.subheader(" Field Accuracy Ranking")
 
 field_accuracy = (df_f[status_cols] == "Sesuai").mean() * 100
 field_df = field_accuracy.reset_index()
@@ -201,106 +287,294 @@ fig_field = px.bar(
     title="Field Verification Accuracy (%)",
     color="Accuracy",
     color_continuous_scale="RdYlGn",
-    range_color=[0, 100]
+    range_color=[0, 100],
+    text="Accuracy"
 )
+fig_field.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+
 st.plotly_chart(fig_field, use_container_width=True)
 
 # ======================
-# TREND ANALYSIS
+# REPEAT NIK
 # ======================
-st.subheader(" Trend Analysis")
+st.subheader("Repeat NIK (Top 20)")
 
-col_t1, col_t2 = st.columns(2)
+repeat_table = (
+    df_f["Nik"]
+    .value_counts()
+    .reset_index()
+)
 
-with col_t1:
-    # Daily trend
-    daily = df_f.groupby(df_f["CreatedDate"].dt.date).agg({
-        "Nik": ["count", "nunique"]
-    })
-    daily.columns = ["Total_Requests", "Unique_NIK"]
-    daily["Duplicate_Rate"] = (daily["Total_Requests"] - daily["Unique_NIK"]) / daily["Total_Requests"]
-    daily = daily.reset_index()
+repeat_table.columns = ["Nik", "Total Request"]
+repeat_table = repeat_table[repeat_table["Total Request"] > 1].head(50)
+
+st.dataframe(repeat_table, use_container_width=True)
+
+# ======================
+# TAMBAHAN: FRAUD RISK VISUALIZATION
+# ======================
+st.subheader(" Fraud Risk Analysis - Top 10 Suspicious NIK")
+
+top_repeat = nik_counts.nlargest(10).reset_index()
+top_repeat.columns = ["NIK", "Hit_Count"]
+
+fig_fraud = px.bar(
+    top_repeat,
+    x="NIK",
+    y="Hit_Count",
+    title="Top 10 Most Repeated NIK (Potential Fraud)",
+    color="Hit_Count",
+    color_continuous_scale="Reds",
+    text="Hit_Count"
+)
+fig_fraud.update_traces(textposition='outside')
+
+st.plotly_chart(fig_fraud, use_container_width=True)
+
+# ======================
+# DAILY TREND
+# ======================
+st.subheader("Daily Request Trend")
+
+daily = (
+    df_f
+    .groupby(df_f["CreatedDate"].dt.date)
+    .size()
+    .reset_index(name="Total")
+)
+
+fig_trend = px.line(
+    daily,
+    x="CreatedDate",
+    y="Total",
+    markers=True
+)
+
+st.plotly_chart(fig_trend, use_container_width=True)
+
+# ======================
+# TAMBAHAN: TREND WITH UNIQUE NIK
+# ======================
+st.subheader(" Request vs Unique NIK Trend")
+
+daily_detailed = df_f.groupby(df_f["CreatedDate"].dt.date).agg({
+    "Nik": ["count", "nunique"]
+})
+daily_detailed.columns = ["Total_Requests", "Unique_NIK"]
+daily_detailed = daily_detailed.reset_index()
+daily_detailed.columns = ["Date", "Total_Requests", "Unique_NIK"]
+
+fig_trend_detail = go.Figure()
+
+fig_trend_detail.add_trace(go.Scatter(
+    x=daily_detailed["Date"],
+    y=daily_detailed["Total_Requests"],
+    name="Total Requests",
+    mode="lines+markers",
+    line=dict(color="steelblue", width=2)
+))
+
+fig_trend_detail.add_trace(go.Scatter(
+    x=daily_detailed["Date"],
+    y=daily_detailed["Unique_NIK"],
+    name="Unique NIK",
+    mode="lines+markers",
+    line=dict(color="green", width=2)
+))
+
+fig_trend_detail.update_layout(
+    title="Daily Requests vs Unique NIK (Gap = Duplicates)",
+    hovermode="x unified"
+)
+
+st.plotly_chart(fig_trend_detail, use_container_width=True)
+
+# ======================
+# SOURCE QUALITY
+# ======================
+st.subheader("% Sesuai per Source")
+
+source_quality = (
+    df_f
+    .groupby("SourceResult")[status_cols]
+    .apply(lambda x: (x == "Sesuai").mean())
+    .reset_index()
+)
+
+st.dataframe(source_quality, use_container_width=True)
+
+# ======================
+# PEAK TIME - HOURLY
+# ======================
+st.subheader("Peak Time – Hourly Request")
+
+df_f["Hour"] = df_f["CreatedDate"].dt.hour
+
+hourly = df_f.groupby("Hour").size().reset_index(name="Total_Request")
+
+fig_hour = px.bar(
+    hourly,
+    x="Hour",
+    y="Total_Request",
+    text="Total_Request"
+)
+st.plotly_chart(fig_hour, use_container_width=True)
+
+peak_hour = hourly.loc[hourly["Total_Request"].idxmax()]
+st.metric(
+    "Jam Tersibuk",
+    f"{int(peak_hour['Hour'])}:00",
+    f"{int(peak_hour['Total_Request']):,} request"
+)
+
+# ======================
+# TAMBAHAN: HOURLY ANOMALY DETECTION
+# ======================
+mean_hourly = hourly["Total_Request"].mean()
+std_hourly = hourly["Total_Request"].std()
+hourly["Anomaly"] = hourly["Total_Request"] > (mean_hourly + 2*std_hourly)
+hourly["Status"] = hourly["Anomaly"].apply(lambda x: "Anomaly" if x else "Normal")
+
+fig_anomaly = px.bar(
+    hourly,
+    x="Hour",
+    y="Total_Request",
+    title="Hourly Traffic with Anomaly Detection (>2σ)",
+    color="Status",
+    color_discrete_map={"Normal": "steelblue", "Anomaly": "red"},
+    text="Total_Request"
+)
+st.plotly_chart(fig_anomaly, use_container_width=True)
+
+# ======================
+# PEAK TIME - DAILY
+# ======================
+st.subheader("Peak Time – Day of Week")
+
+df_f["Day"] = df_f["CreatedDate"].dt.day_name()
+
+day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+
+daily = (
+    df_f.groupby("Day")
+    .size()
+    .reindex(day_order)
+    .reset_index(name="Total_Request")
+)
+
+fig_day = px.bar(
+    daily,
+    x="Day",
+    y="Total_Request",
+    text="Total_Request"
+)
+st.plotly_chart(fig_day, use_container_width=True)
+
+# ======================
+# TAMBAHAN: ACTIONABLE INSIGHTS
+# ======================
+st.markdown("---")
+st.subheader(" Actionable Insights & Recommendations")
+
+insights_col1, insights_col2 = st.columns(2)
+
+with insights_col1:
+    st.markdown("###  Issues Detected")
     
-    fig_trend = px.line(
-        daily,
-        x="CreatedDate",
-        y=["Total_Requests", "Unique_NIK"],
-        title="Daily Request vs Unique NIK",
-        markers=True
+    # Fraud risk
+    if high_risk_nik > 0:
+        st.error(f" **{high_risk_nik} NIK** dengan hit >5x → Investigate for potential fraud")
+    
+    # Low efficiency source
+    worst_source = source_perf.loc[source_perf["Cost_Efficiency"].idxmin()]
+    if worst_source["Cost_Efficiency"] < 0.8:
+        st.warning(f" **{worst_source['SourceResult']}** efficiency hanya {worst_source['Cost_Efficiency']:.1%} → Optimize caching")
+    
+    # Field accuracy
+    worst_field = field_df.iloc[0]
+    if worst_field["Accuracy"] < 80:
+        st.warning(f" **{worst_field['Field']}** accuracy {worst_field['Accuracy']:.1f}% → Check data quality")
+
+with insights_col2:
+    st.markdown("###  Recommendations")
+    
+    st.success(f" Peak hour: **{int(peak_hour['Hour'])}:00** → Scale infrastructure during this time")
+    
+    best_source = source_perf.loc[source_perf["Cost_Efficiency"].idxmax()]
+    st.success(f" **{best_source['SourceResult']}** has best efficiency ({best_source['Cost_Efficiency']:.1%}) → Use as primary source")
+    
+    if duplicate_rate > 0.3:
+        st.info(f" {duplicate_rate:.1%} duplicate rate → Implement better caching strategy")
+
+# ======================
+# SIDEBAR - NIK DRILL DOWN
+# ======================
+st.sidebar.subheader("🔍 NIK Drill Down")
+
+nik_list = sorted(df["Nik"].dropna().astype(str).unique())
+
+nik_options = [""] + nik_list  # opsi kosong
+
+selected_nik = st.sidebar.selectbox(
+    "Cari NIK",
+    options=nik_options,
+    format_func=lambda x: "Ketik NIK..." if x == "" else x
+)
+
+# Drill-down data
+if selected_nik != "":
+    df_nik = df[df["Nik"].astype(str) == selected_nik]
+    
+    # Ringkasan per Source
+    nik_source = (
+        df_nik["SourceResult"]
+        .value_counts()
+        .reset_index()
     )
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-with col_t2:
-    # Day of week pattern
-    df_f["DayOfWeek"] = df_f["CreatedDate"].dt.day_name()
-    day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     
-    dow = df_f.groupby("DayOfWeek").size().reindex(day_order).reset_index(name="Requests")
+    nik_source.columns = ["SourceResult", "Total"]
     
-    fig_dow = px.bar(
-        dow,
-        x="DayOfWeek",
-        y="Requests",
-        title="Weekly Pattern",
-        color="Requests",
-        color_continuous_scale="Blues"
-    )
-    st.plotly_chart(fig_dow, use_container_width=True)
-
-# ======================
-# ACTIONABLE INSIGHTS
-# ======================
-st.subheader(" Actionable Insights")
-
-insights = []
-
-# Insight 1: Fraud risk
-if high_risk_nik > 0:
-    insights.append(f" **{high_risk_nik} NIK** hit >5x → Investigate for fraud")
-
-# Insight 2: Source efficiency
-worst_source = source_perf.loc[source_perf["Cost_Efficiency"].idxmin()]
-insights.append(f" **{worst_source['SourceResult']}** has lowest efficiency ({worst_source['Cost_Efficiency']:.1%}) → Consider optimization")
-
-# Insight 3: Field issues
-worst_field = field_df.iloc[0]
-if worst_field["Accuracy"] < 80:
-    insights.append(f" **{worst_field['Field']}** accuracy only {worst_field['Accuracy']:.1f}% → Data quality issue")
-
-# Insight 4: Peak time
-peak_hour = hourly_df.loc[hourly_df["Requests"].idxmax()]
-insights.append(f" Peak traffic at **{int(peak_hour['Hour'])}:00** ({int(peak_hour['Requests'])} req) → Scale resources")
-
-for i in insights:
-    st.markdown(i)
-
-# ======================
-# DRILL DOWN
-# ======================
-with st.expander(" NIK Drill Down"):
-    selected_nik = st.selectbox(
-        "Search NIK",
-        options=[""] + sorted(df["Nik"].dropna().astype(str).unique()),
-        format_func=lambda x: "Select NIK..." if x == "" else x
+    c1, c2, c3 = st.columns(3)
+    
+    c1.metric(
+        "DB_CACHE",
+        int(nik_source.loc[nik_source["SourceResult"] == "DB_CACHE", "Total"].sum())
     )
     
-    if selected_nik:
-        df_nik = df[df["Nik"].astype(str) == selected_nik]
-        
-        col_n1, col_n2, col_n3 = st.columns(3)
-        col_n1.metric("Total Hits", len(df_nik))
-        col_n2.metric("Date Range", f"{df_nik['CreatedDate'].min().date()} - {df_nik['CreatedDate'].max().date()}")
-        col_n3.metric("Sources Used", df_nik["SourceResult"].nunique())
-        
-        st.dataframe(
-            df_nik.sort_values("CreatedDate", ascending=False)[
-                ["CreatedDate", "SourceResult", "SourceApps"] + status_cols
-            ],
-            use_container_width=True
-        )
+    c2.metric(
+        "DUKCAPIL",
+        int(nik_source.loc[nik_source["SourceResult"] == "DUKCAPIL", "Total"].sum())
+    )
+    
+    c3.metric(
+        "BCA",
+        int(nik_source.loc[nik_source["SourceResult"] == "BCA", "Total"].sum())
+    )
+    
+    # Chart
+    fig_nik = px.bar(
+        nik_source,
+        x="SourceResult",
+        y="Total",
+        color="SourceResult",
+        text="Total",
+        title=f"Request Distribution for NIK {selected_nik}"
+    )
+    
+    st.plotly_chart(fig_nik, use_container_width=True)
+    
+    # Detail Table
+    st.markdown("**Detail Request**")
+    
+    st.dataframe(
+        df_nik.sort_values("CreatedDate", ascending=False),
+        use_container_width=True
+    )
+else:
+    st.info(" Pilih NIK dari dropdown untuk melihat detail")
 
 # ======================
 # RAW DATA
 # ======================
-with st.expander(" Raw Data"):
+with st.expander("Raw Data"):
     st.dataframe(df_f, use_container_width=True)
